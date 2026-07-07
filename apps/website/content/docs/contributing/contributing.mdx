@@ -7,7 +7,8 @@ description: How to contribute changes to Fabricator.
 
 1. Read the [Architecture](/docs/contributing/architecture/) overview.
 2. Set up the app with [Running from Source](/docs/contributing/dev-setup/).
-3. Check existing tests under `tests/` for the area you plan to modify.
+3. Check existing tests under `tests/`, `apps/backend/tests/`, and `apps/cli/tests/` for the area you plan to modify.
+4. If the change affects user-facing behavior, find the matching page in `apps/website/content/docs/` before you start.
 
 ## Development loop
 
@@ -19,14 +20,56 @@ pip install -r requirements.txt
 pytest
 
 # frontend
-cd frontend
+cd apps/frontend
 npm install
 npm run build
+
+# website and docs
+cd ../website
+bun install
+bun run types:check
+bun run lint
+bun run build
+```
+
+From the repository root, the website checks are:
+
+```bash
+cd apps/website
+bun run types:check
+bun run lint
+bun run build
 ```
 
 ## Documentation changes
 
 When backend routes, config variables, installer behavior, CLI commands, or user workflows change, update this docs site in the same change set.
+
+Keep documentation sources in these places:
+
+| Area | Source |
+| --- | --- |
+| Public docs | `apps/website/content/docs/` |
+| Legal pages | `apps/website/src/content/legal/` |
+| Marketing pages | `apps/website/src/routes/` |
+| Root project overview | `README.md` |
+| Contributor entrypoint | `CONTRIBUTING.md` |
+| Agent orientation | `AGENTS.md` |
+| API entrypoint | `API_DOCS.md`, which points to the canonical Fumadocs API page |
+
+If a page is moved, prefer a short compatibility page only for URLs that already existed publicly. Do not add duplicate docs sections for new content.
+
+## Marketing and component structure
+
+Marketing pages should keep one-off sections directly in their route files. Extract a component when it is reused, when it owns meaningful interaction/state, or when it is a layout primitive shared across routes.
+
+Current shared marketing pieces include:
+
+- `MarketingLayout`
+- `LegalMdxLayout`
+- `FAQSection`
+- `ScreenshotCarousel`
+- small shared primitives in `apps/website/src/components/marketing/shared.tsx`
 
 ## Commit style
 

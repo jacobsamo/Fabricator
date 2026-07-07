@@ -3,7 +3,7 @@ title: Introduction
 description: What Fabricator is, what it does, and when to use it.
 ---
 
-Fabricator is a self-hosted dashboard for Minecraft server operators. It runs as a Linux systemd service or Docker container and provides a browser UI for creating, starting, stopping, configuring, backing up, and maintaining multiple Minecraft server instances.
+Fabricator is a self-hosted dashboard for Minecraft server operators. It runs as a Linux systemd service, Windows executable, or Docker container and provides a browser UI for creating, starting, stopping, configuring, backing up, and maintaining multiple Minecraft server instances.
 
 The current codebase supports these loaders through a shared installer registry:
 
@@ -28,15 +28,16 @@ Mod and modpack discovery uses the [Modrinth API](https://docs.modrinth.com/). J
 - **Settings** — edit common `server.properties` values from the UI; advanced settings are available in expert mode.
 - **playit.gg tunnels** — expose Minecraft servers without router port forwarding and show each server's public address from the dashboard.
 - **Self-update** — check GitHub Releases and trigger an in-dashboard update.
-- **CLI** — system-level commands for status, start, stop, update, version, uninstall, and help.
+- **CLI** — system-level commands for status, start, stop, update, version, password hash generation, uninstall, and help.
 
 ## How it works
 
 Fabricator has three main parts:
 
-1. **Backend:** Python/Flask blueprints under `backend/` expose the HTTP API and coordinate installers, processes, backups, player files, and update checks.
-2. **Frontend:** Vue 3 + Vite under `frontend/` renders the dashboard and calls the API.
-3. **System integration:** `tools/install.sh`, `tools/update.sh`, the systemd unit, and the `fabricator` CLI manage deployment and service lifecycle.
+1. **Backend:** Python/Flask blueprints under `apps/backend/` expose the HTTP API and coordinate installers, processes, backups, player files, and update checks.
+2. **Dashboard frontend:** Vue 3 + Vite under `apps/frontend/` renders the dashboard and calls the API.
+3. **Website/docs:** TanStack/Fumadocs under `apps/website/` publishes the marketing pages and documentation.
+4. **System integration:** `tools/install.sh`, `tools/update.sh`, the systemd unit, Docker files, Windows packaging, and the `fabricator` CLI manage deployment and service lifecycle.
 
 A production install stores application files in `/opt/fabricator/app`, virtualenv files in `/opt/fabricator/venv`, mutable data under `/var/lib/fabricator`, and environment configuration in `/etc/fabricator/fabricator.env`.
 

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FAQSection } from "@/components/marketing/sections/faq-section";
+import { FAQSection } from "@/components/marketing/faq-section";
 import {
   MarketingLayout,
   MarketingRouteLink,

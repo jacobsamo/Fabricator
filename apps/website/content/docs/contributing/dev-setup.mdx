@@ -26,7 +26,7 @@ Development defaults bind to `127.0.0.1:5000` and store data in the platform app
 ## Frontend setup
 
 ```bash
-cd frontend
+cd apps/frontend
 npm install
 npm run dev
 ```
@@ -36,11 +36,29 @@ The frontend is Vue 3 + Vite. Production releases serve the built frontend throu
 ## Build frontend
 
 ```bash
-cd frontend
+cd apps/frontend
 npm run build
 ```
 
-The build output goes to `frontend/dist` and is served by the backend in production-like mode.
+The build output goes to `apps/frontend/dist` and is served by the backend in production-like mode.
+
+## Website and docs setup
+
+The marketing site and documentation live in `apps/website`. Docs content is stored in `apps/website/content/docs`.
+
+```bash
+cd apps/website
+bun install
+bun run dev
+```
+
+Useful website checks:
+
+```bash
+bun run types:check
+bun run lint
+bun run build
+```
 
 ## Tests
 
@@ -56,14 +74,16 @@ The test suite covers app factory behavior, storage, routes, installers, Java co
 
 | Path | Purpose |
 | --- | --- |
-| `backend/core/app.py` | Flask app factory and blueprint registration. |
-| `backend/core/config.py` | Environment-driven config object. |
-| `backend/server/routes.py` | Main server, files, mods, Java, metrics, loader, console routes. |
-| `backend/server/installer/` | Loader-specific server installers. |
-| `backend/modrinth/` | Modrinth API client and routes. |
-| `backend/backups/` | Backup configs, storage, scheduler, progress, restore. |
-| `backend/server/players/` | Player files, live commands, and player routes. |
-| `frontend/src/router/index.js` | Dashboard route map. |
-| `frontend/src/stores/` | Pinia state stores. |
+| `apps/backend/core/app.py` | Flask app factory and blueprint registration. |
+| `apps/backend/core/config.py` | Environment-driven config object. |
+| `apps/backend/server/routes.py` | Main server, files, mods, Java, metrics, loader, console routes. |
+| `apps/backend/server/installer/` | Loader-specific server installers. |
+| `apps/backend/modrinth/` | Modrinth API client and routes. |
+| `apps/backend/backups/` | Backup configs, storage, scheduler, progress, restore. |
+| `apps/backend/server/players/` | Player files, live commands, and player routes. |
+| `apps/frontend/src/router/index.js` | Dashboard route map. |
+| `apps/frontend/src/stores/` | Pinia state stores. |
+| `apps/cli/` | Fabricator CLI package and CLI tests. |
+| `apps/website/src/routes/` | Marketing/docs route files. |
+| `apps/website/content/docs/` | Canonical documentation content. |
 | `tools/install.sh` | Release installer. |
-| `tools/cli.py` | `fabricator` CLI. |

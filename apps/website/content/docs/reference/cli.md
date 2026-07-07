@@ -3,9 +3,9 @@ title: CLI
 description: Command-line interface reference for Fabricator.
 ---
 
-The Fabricator CLI is a small [Click](https://click.palletsprojects.com/) program for **system-level** service management on a standard Linux install. It drives `systemctl`, reads the installed version marker, talks to the local HTTP API for status, runs the bundled update script, and can remove an installation.
+The Fabricator CLI is a small [Click](https://click.palletsprojects.com/) program for **system-level** service management on a standard Linux install. It drives `systemctl`, reads the installed version marker, talks to the local HTTP API for status, runs the bundled update script, generates auth password hashes, and can remove an installation.
 
-Source code lives in the main repo: [`tools/cli.py`](https://github.com/philderks/Fabricator/blob/main/tools/cli.py).
+Source code lives in the main repo under `apps/cli/fabricator/cli.py`.
 
 ## Prerequisites
 
@@ -43,7 +43,7 @@ Updates Fabricator to the latest GitHub release.
 
 ### `fabricator status`
 
-Shows systemd state and local Flask/API reachability.
+Shows systemd state, local Flask/API reachability, and running server counts when the server list is readable.
 
 Options:
 
@@ -54,8 +54,8 @@ Options:
 Human output includes:
 
 - `Service`: result of `systemctl is-active fabricator`.
-- `Flask`: whether `GET http://localhost:5000/api/status` responds within five seconds.
-- Optional Minecraft-ish keys (`players`, `tps`, `uptime`) when the API response includes them.
+- `Flask`: whether `GET http://localhost:5000/api/health` responds within five seconds.
+- `Servers`: number of running servers out of the total returned by `GET /api/servers`, when readable.
 
 JSON shape:
 
@@ -63,8 +63,7 @@ JSON shape:
 {
   "systemd_state": "active",
   "flask_up": true,
-  "api_status_code": 200,
-  "api_body": {}
+  "servers": []
 }
 ```
 
@@ -95,6 +94,18 @@ The command attempts, in order:
 
 Individual removal steps report warnings rather than aborting the whole sequence.
 
+### `fabricator hash-password`
+
+Generates a password hash for declarative authentication setup with `FABRICATOR_AUTH_PASSWORD_HASH`.
+
+Use this when you want to skip the first-boot browser setup page and provide the operator password through environment configuration instead:
+
+```bash
+fabricator hash-password
+```
+
+The command prompts for the password twice and prints the hash. Store the hash in `/etc/fabricator/fabricator.env` or your Docker environment, not the plain password.
+
 ### `fabricator help`
 
 Lists every registered subcommand and short description.
@@ -121,5 +132,6 @@ fabricator update --help
 | `update` | Update to latest GitHub release via installer update mode. |
 | `status` | Show service/API health, optionally as JSON. |
 | `version` | Read installed release marker, optionally as JSON. |
+| `hash-password` | Generate a password hash for `FABRICATOR_AUTH_PASSWORD_HASH`. |
 | `uninstall` | Interactive destructive removal. |
 | `help` | List commands, optionally as JSON. |

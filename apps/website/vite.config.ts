@@ -1,16 +1,19 @@
-import react from '@vitejs/plugin-react';
-import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import { defineConfig } from 'vite';
-import tailwindcss from '@tailwindcss/vite';
-import mdx from 'fumadocs-mdx/vite';
-import { nitro } from 'nitro/vite';
-import { fileURLToPath } from 'node:url';
+import react from "@vitejs/plugin-react";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
+import mdx from "fumadocs-mdx/vite";
+import { cloudflare } from "@cloudflare/vite-plugin";
+import { fileURLToPath } from "node:url";
 
 const syncExternalStoreShim = fileURLToPath(
-  new URL('./src/shims/use-sync-external-store-shim.ts', import.meta.url),
+  new URL("./src/shims/use-sync-external-store-shim.ts", import.meta.url)
 );
 const syncExternalStoreSelectorShim = fileURLToPath(
-  new URL('./src/shims/use-sync-external-store-with-selector.ts', import.meta.url),
+  new URL(
+    "./src/shims/use-sync-external-store-with-selector.ts",
+    import.meta.url
+  )
 );
 
 export default defineConfig({
@@ -18,6 +21,7 @@ export default defineConfig({
     port: 3000,
   },
   plugins: [
+    cloudflare({ viteEnvironment: { name: "ssr" } }),
     mdx(),
     tailwindcss(),
     tanstackStart({
@@ -31,37 +35,35 @@ export default defineConfig({
 
       pages: [
         {
-          path: '/',
+          path: "/",
         },
         {
-          path: '/download',
+          path: "/download",
         },
         {
-          path: '/features',
+          path: "/features",
         },
         {
-          path: '/privacy',
+          path: "/privacy",
         },
         {
-          path: '/impressum',
+          path: "/impressum",
         },
         {
-          path: '/docs',
+          path: "/docs",
         },
         {
-          path: '/api/search',
+          path: "/api/search",
         },
         {
-          path: 'llms-full.txt',
+          path: "llms-full.txt",
         },
         {
-          path: 'llms.txt',
+          path: "llms.txt",
         },
       ],
     }),
     react(),
-    // please see https://tanstack.com/start/latest/docs/framework/react/guide/hosting#nitro for guides on hosting
-    nitro(),
   ],
   resolve: {
     tsconfigPaths: true,

@@ -10,6 +10,8 @@ Fabricator is a self-hosted Minecraft server manager. Keep this file minimal; it
 - `apps/website/` - Marketing site and Fumadocs documentation site.
 - `apps/website/content/docs/` - Canonical docs content. Start with `index.mdx`, `meta.json`, and each section's `meta.json`.
 - `apps/website/content/docs/contributing/` - Contributor and development workflow docs.
+- `apps/website/src/routes/` - Marketing, legal, and docs route entrypoints. Keep one-off marketing sections in the owning route.
+- `apps/website/src/components/marketing/` - Shared marketing layouts, reused sections, and logic-heavy components only.
 - `tests/` - Repo-level tests.
 - `tools/`, `docker/`, `Dockerfile`, `docker-compose.yml` - Install, release, and deployment support.
 - `assets/` - Shared project assets.
@@ -19,3 +21,5 @@ Ignore generated dependency/build folders such as `node_modules`, `dist`, `.outp
 ## Docs
 
 When changing user-facing behavior, install steps, configuration, CLI/API behavior, troubleshooting, architecture, or contributor workflow, update the matching docs in `apps/website/content/docs/` in the same change.
+
+Keep root docs (`README.md`, `CONTRIBUTING.md`, `API_DOCS.md`) concise and pointed at the canonical Fumadocs pages.

@@ -3,20 +3,23 @@ title: Architecture
 description: An overview of Fabricator's system architecture, components, and data flow.
 ---
 
-Fabricator is a Python/Flask backend plus a Vue 3 dashboard, deployed as a systemd service by shell tooling.
+Fabricator is a Python/Flask backend plus a Vue 3 dashboard, with a TanStack/Fumadocs website for marketing and documentation. Release installs are deployed as a systemd service by shell tooling, with Docker and Windows distribution paths alongside the native Linux installer.
 
 ## Repository structure
 
 ```text
 Fabricator/
-├── backend/
-│   ├── core/          # App factory, config, version helpers
-│   ├── server/        # Server registry, installers, Java manager, players
-│   ├── modrinth/      # Modrinth client and API routes
-│   ├── backups/       # Backup/restore storage, jobs, scheduler
-│   ├── system/        # Self-update routes and update service
-│   └── utils/         # Shared parsing, platform, route, time, zip helpers
-├── frontend/          # Vue 3 + Vite dashboard
+├── apps/
+│   ├── backend/
+│   │   ├── core/      # App factory, config, version helpers
+│   │   ├── server/    # Server registry, installers, Java manager, players
+│   │   ├── modrinth/  # Modrinth client and API routes
+│   │   ├── backups/   # Backup/restore storage, jobs, scheduler
+│   │   ├── system/    # Self-update routes and update service
+│   │   └── utils/     # Shared parsing, platform, route, time, zip helpers
+│   ├── frontend/      # Vue 3 + Vite dashboard
+│   ├── cli/           # Fabricator CLI package and tests
+│   └── website/       # TanStack/Fumadocs marketing and docs site
 ├── tools/             # install.sh, update.sh, uninstall.sh, CLI
 ├── tests/             # Pytest coverage for backend behavior
 └── run.py             # Process entry point
@@ -24,13 +27,15 @@ Fabricator/
 
 ## Backend
 
-The Flask app is created in `backend/core/app.py`. Blueprints mount under `/api` and keep feature areas isolated:
+The Flask app is created in `apps/backend/core/app.py`. Blueprints mount under `/api` and keep feature areas isolated:
 
-- `backend/server/routes.py` — server CRUD, install/start/stop/restart, files, mods, Java, metrics, loader versions, console.
-- `backend/modrinth/routes.py` — Modrinth search, version resolution, mod install, modpack install.
-- `backend/backups/routes.py` — backup configs, snapshots, downloads, restores, job polling.
-- `backend/server/players/routes.py` — player state, whitelist, ops, bans, IP bans, kicks.
-- `backend/system/routes.py` — self-update status and trigger.
+- `apps/backend/server/routes.py` — server CRUD, install/start/stop/restart, files, mods, Java, metrics, loader versions, console.
+- `apps/backend/modrinth/routes.py` — Modrinth search, version resolution, mod install, modpack install.
+- `apps/backend/backups/routes.py` — backup configs, snapshots, downloads, restores, job polling.
+- `apps/backend/server/players/routes.py` — player state, whitelist, ops, bans, IP bans, kicks.
+- `apps/backend/system/routes.py` — self-update status and trigger.
+- `apps/backend/auth/routes.py` — setup, login, logout, and password changes.
+- `apps/backend/playit/routes.py` — shared playit.gg tunnel-agent state and controls.
 
 Config is instance-based: each `get_config()` call reads current environment variables. This avoids stale import-time values in tests and after `.env` loading.
 
@@ -49,7 +54,7 @@ Persisted records live in `SERVER_INDEX_FILE`. Runtime data is added to API resp
 
 ## Installer registry
 
-`backend/server/installer/__init__.py` maps loader names to installer classes:
+`apps/backend/server/installer/__init__.py` maps loader names to installer classes:
 
 ```python
 LOADER_REGISTRY = {
@@ -78,7 +83,20 @@ The dashboard is a Vue app with route groups:
 /server/:id/settings      # server.properties editor
 ```
 
-The sidebar hides the Mods tab for Vanilla servers. API modules live in `frontend/src/api/`, state stores in `frontend/src/stores/`, and feature pages in `frontend/src/views/server/`.
+The sidebar hides the Mods tab for Vanilla servers. API modules live in `apps/frontend/src/api/`, state stores in `apps/frontend/src/stores/`, and feature pages in `apps/frontend/src/views/server/`.
+
+## Website and docs
+
+The public site lives in `apps/website`. It contains:
+
+- marketing routes in `apps/website/src/routes/`
+- reusable marketing layout/components in `apps/website/src/components/marketing/`
+- Fumadocs content in `apps/website/content/docs/`
+- legal MDX content in `apps/website/src/content/legal/`
+
+Marketing pages should keep one-off page sections directly in the route file. Shared sections such as FAQ, layout, legal MDX layout, and logic-heavy components such as the screenshot carousel can live under `apps/website/src/components/marketing/`.
+
+Docs are part of the main repository now. When app behavior, install steps, API contracts, CLI commands, or contributor workflows change, update `apps/website/content/docs/` in the same change.
 
 ## Deployment
 
