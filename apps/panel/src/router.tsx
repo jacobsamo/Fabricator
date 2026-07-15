@@ -3,24 +3,12 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   redirect,
 } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/app/app-shell";
-import { LoginPage } from "@/routes/login";
-import { ServerListPage } from "@/routes/index";
-import { SetupPage } from "@/routes/setup";
 import { guardLoginRoute, guardSetupRoute, requireAppAuth } from "@/lib/auth-guard";
-import { ServerLayout } from "@/routes/server/$serverId/route";
-import { BackupsPage } from "@/routes/server/$serverId/backups";
-import { ConsolePage } from "@/routes/server/$serverId/console";
-import { FilesPage } from "@/routes/server/$serverId/files";
-import { ModsPage } from "@/routes/server/$serverId/mods";
-import { OverviewPage } from "@/routes/server/$serverId/overview";
-import { PlayitPage } from "@/routes/server/$serverId/playit";
-import { PlayersPage } from "@/routes/server/$serverId/players";
-import { PropertiesPage } from "@/routes/server/$serverId/properties";
-import { SettingsPage } from "@/routes/server/$serverId/settings";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -36,7 +24,7 @@ const appRoute = createRoute({
 const indexRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/",
-  component: ServerListPage,
+  component: lazyRouteComponent(() => import("@/routes/index"), "ServerListPage"),
 });
 
 const loginRoute = createRoute({
@@ -46,20 +34,20 @@ const loginRoute = createRoute({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
   }),
   beforeLoad: guardLoginRoute,
-  component: LoginPage,
+  component: lazyRouteComponent(() => import("@/routes/login"), "LoginPage"),
 });
 
 const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/setup",
   beforeLoad: guardSetupRoute,
-  component: SetupPage,
+  component: lazyRouteComponent(() => import("@/routes/setup"), "SetupPage"),
 });
 
 const serverRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/server/$serverId",
-  component: ServerLayout,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/route"), "ServerLayout"),
 });
 
 const serverIndexRoute = createRoute({
@@ -73,55 +61,55 @@ const serverIndexRoute = createRoute({
 const overviewRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/overview",
-  component: OverviewPage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/overview"), "OverviewPage"),
 });
 
 const consoleRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/console",
-  component: ConsolePage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/console"), "ConsolePage"),
 });
 
 const playersRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/players",
-  component: PlayersPage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/players"), "PlayersPage"),
 });
 
 const modsRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/mods",
-  component: ModsPage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/mods"), "ModsPage"),
 });
 
 const filesRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/files",
-  component: FilesPage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/files"), "FilesPage"),
 });
 
 const backupsRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/backups",
-  component: BackupsPage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/backups"), "BackupsPage"),
 });
 
 const playitRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/playit",
-  component: PlayitPage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/playit"), "PlayitPage"),
 });
 
 const propertiesRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/properties",
-  component: PropertiesPage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/properties"), "PropertiesPage"),
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => serverRoute,
   path: "/settings",
-  component: SettingsPage,
+  component: lazyRouteComponent(() => import("@/routes/server/$serverId/settings"), "SettingsPage"),
 });
 
 const routeTree = rootRoute.addChildren([

@@ -36,6 +36,7 @@ Completed:
 - Implemented the first overview, console, and files route pass: runtime cards, recent logs, installed-mod preview, console merge/filter/auto-scroll/command submit, file breadcrumbs, text-file gating, dirty editor Store, discard confirmation, and save/open/copy feedback.
 - Implemented the first players, mods, and Modrinth/modpack browsing pass: player state, running-only online polling, search/filter, player mutations with optimistic rollback, installed-mod list/search/selection/bulk delete, Modrinth mod search/install, and basic modpack search/install/replace confirmation.
 - Implemented the first backups, playit, properties, settings, Java manager, and change-password route/form pass and verified the panel still passes build, typecheck, lint, and tests.
+- Added static route-level code splitting with TanStack Router lazy route components and Vite vendor chunk groups. The panel still builds to static `dist/` assets for Flask, native installs, and Docker.
 - Fixed the integrated TanStack Store helper typing so action Stores and plain UI Stores both work in route code.
 - Fixed integrated TanStack Form typing in the first backup config, server properties, and change-password forms.
 - Verified `bun run test` succeeds for `apps/panel`.
@@ -59,9 +60,15 @@ apps/panel production build: passes
 apps/panel type check: passes
 apps/panel lint: passes
 apps/panel tests: pass
-current JS bundle: 654.52 kB, 188.34 kB gzip
 current CSS bundle: 33.94 kB, 7.05 kB gzip
-build note: Vite warns the main JS chunk is larger than 500 kB; route-level code splitting is now a required performance follow-up before cutover.
+static route split snapshot:
+  entry chunk: 35.25 kB, 10.43 kB gzip
+  largest route chunk: backups at 23.29 kB, 6.62 kB gzip
+  vendor-react chunk: 182.16 kB, 57.34 kB gzip
+  vendor-tanstack chunk: 193.49 kB, 54.75 kB gzip
+  vendor chunk: 104.85 kB, 30.13 kB gzip
+  vendor-ui chunk: 42.67 kB, 12.58 kB gzip
+build note: no route page is in the initial entry bundle; remaining heavy chunks are shared vendor libraries and can be browser-cached across routes.
 ```
 
 ## Direction
@@ -156,6 +163,28 @@ During migration, keep the current contract:
 apps/frontend/dist -> served by Flask
 apps/panel -> development app only
 ```
+
+## Static Route Splitting
+
+The panel should code split by route while remaining a plain static SPA.
+
+Use TanStack Router route components with `lazyRouteComponent` for page-level modules. Vite turns these dynamic imports into hashed files under `dist/assets`, so self-hosted installs and Docker containers only need to serve the static build directory. No SSR, CDN, or runtime bundler is required.
+
+The current route chunk policy is:
+
+- keep root providers, auth guards, query client, app shell, and route declarations in the entry graph
+- lazy-load `/`, `/login`, `/setup`, and each `/server/$serverId/*` page module
+- group shared libraries with Vite `build.rolldownOptions.output.manualChunks`
+- keep React, TanStack, UI helpers, and generic vendor modules in cacheable vendor chunks
+- rely on TanStack Router `defaultPreload: "intent"` so likely route chunks are prefetched on user intent without loading the whole app upfront
+
+Static serving requirements:
+
+- `dist/index.html` must reference only local `dist/assets/*` files.
+- Flask must serve unknown non-API app routes to `index.html`.
+- Flask/Docker/PyInstaller must serve `dist/assets/*` with long-lived cache headers where practical.
+- A deploy/update may replace old hashed chunks; TanStack's lazy component wrapper handles stale chunk URLs by attempting one page reload on module-not-found.
+- Packaged smoke tests must refresh deep links such as `/server/<id>/files` and prove lazy chunks load from the packaged static server, not only from Vite dev.
 
 ## Update Safety Contract
 
@@ -498,6 +527,43 @@ Test migration order:
 10. playit daemon state.
 11. Properties/settings/Java/password forms.
 12. Packaged update and static serving.
+
+## Next Verification Tranche
+
+Do this before considering the React panel a cutover candidate. The goal is to prove the first-pass route ports behave like the Vue system under realistic backend states without requiring a local Minecraft server.
+
+Fixture and parity coverage:
+
+- Expand MSW fixtures for running, stopped, pending, installing, failed, auth-expired, API-error, empty-list, and large-list states.
+- Add React route tests for every server page: overview, console, files, players, mods, backups, playit, properties, and settings.
+- Add Vue parity capture tests or screenshots for the highest-risk flows before replacing the shipped frontend.
+- Add packaged Flask/Docker smoke tests that serve the built `apps/panel/dist` as `frontend/dist` and refresh deep links for every route.
+
+Mutation rollback and session expiry:
+
+- Players: whitelist/op/ban/kick/IP-ban success, backend failure rollback, and 401 session expiry.
+- Mods: single delete, bulk delete, Modrinth install, failed install, and 401 session expiry.
+- Files: save success, save failure, dirty discard, route-change protection, and 401 session expiry.
+- Backups: config save/delete, quick backup, restore, import-world upload failure, job failure, and 401 session expiry.
+- Settings/properties/password: dirty state, validation errors, backend errors, running-server edit guard, and 401 session expiry.
+
+Polling and backend state machines:
+
+- Server shell polling must preserve Vue's effective-status precedence when an action is in flight.
+- Console/log polling must pause or reduce cadence when the route is not active.
+- Players online polling must only run while the server is running.
+- Backup job polling must stop on terminal states and surface retained/deleted/purged file results.
+- playit polling must match the daemon lifecycle: unsupported, stopped, starting, running, claim-required, error.
+- Java install polling must cover checking, needs-Java, downloading, installing, done, error, and managed-Java removal.
+- Update polling must cover idle, update-available, in-progress, success, failure, and self-update-disabled states.
+
+Modpack and Modrinth parity:
+
+- Dependency dialog: install dependencies, install main only, cancel.
+- Compatibility dialog: no exact version, compatible version selected, no compatible version.
+- Mod side decisions: all-server, all-client, per-file choices, unresolved choices blocked.
+- Missing-file continuation: accepted skipped files, cancelled install, backend failure.
+- Replace install: backup option on/off, Java warning, install-progress polling, failed install recovery.
 
 ## Migration Workstreams
 

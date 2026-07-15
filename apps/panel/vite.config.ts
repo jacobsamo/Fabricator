@@ -21,6 +21,27 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return undefined;
+          }
+          if (id.includes("/@tanstack/")) {
+            return "vendor-tanstack";
+          }
+          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) {
+            return "vendor-react";
+          }
+          if (id.includes("/lucide-react/") || id.includes("/sonner/") || id.includes("/@base-ui-components/")) {
+            return "vendor-ui";
+          }
+          return "vendor";
+        },
+      },
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,
