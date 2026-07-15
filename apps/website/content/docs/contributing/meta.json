@@ -3,7 +3,6 @@
   "pages": [
     "architecture",
     "dev-setup",
-    "panel-migration-plan",
     "../contributors",
     "contributing"
   ]

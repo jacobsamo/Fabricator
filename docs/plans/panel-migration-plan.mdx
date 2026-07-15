@@ -1,0 +1,1218 @@
+---
+title: Panel Migration Plan
+description: Plan for replacing the shipped Vue dashboard with a new React, TanStack, shadcn, Base UI, and Tailwind panel.
+---
+
+This is the migration plan for introducing `apps/panel` as Fabricator's new installed dashboard while keeping the current Vue dashboard in `apps/frontend` during the transition.
+
+The goal is to ship a faster, more maintainable control panel without changing the backend API contract or making release installs more complex.
+
+## Execution Status
+
+Last updated: 2026-07-15.
+
+Completed:
+
+- Created `apps/panel` as a Vite React TypeScript app.
+- Added the requested panel stack to `apps/panel/package.json`: TanStack Router, TanStack Query, TanStack Form, TanStack Hotkeys, Zod, Tailwind v4, shadcn, Base UI, lucide, and sonner.
+- Added `apps/panel/components.json` with `base-nova`, Base UI, lucide, and the same alias shape as the website.
+- Added the initial route tree and folder structure for `/`, `/login`, `/setup`, and `/server/$serverId/*`.
+- Added initial API client, auth/server API modules, Zod schemas, query options, and auth form schemas.
+- Added initial local shadcn-style UI components for button, card, input, and badge.
+- Added an initial app shell with sidebar, topbar, route placeholders, and Fabricator theme tokens adapted from the website.
+- Ported the Vue auth route-guard contract into TanStack Router: setup lock, login redirect, app-route protection, auth-disabled passthrough, status-call failure fallback, safe same-origin redirects, global 401 handling, cached install-status routing, and client-side post-auth redirects.
+- Added the auth cache boundary for logout/session expiry: auth status is kept under `["auth", "status"]`, protected app data is kept under `["session", ...]`, and logout/401 clears protected session data before routing to login.
+- Fixed auth status parsing to match the backend's `needs_setup` response.
+- Updated login/setup behavior to keep wrong-password and setup errors local instead of triggering global auth redirects.
+- Updated the server list route to redirect to the first server overview when servers exist, matching the Vue route behavior.
+- Removed the scaffold-only fake `/server/current` navigation and disabled server nav when no server is selected.
+- Switched panel theme tokens and font toward the current Vue dashboard system: DM Sans, `#0f0f0f` background, `#141414` panels, `#1e1e1e` borders, `#f97316` primary, and current scrollbar/input/button treatment.
+- Added a panel-local `lint` script with `oxlint`.
+- Verified `bun run build` succeeds for `apps/panel`.
+- Verified `bun run types:check` succeeds for `apps/panel`.
+- Verified `bun run lint` succeeds for `apps/panel`.
+- Added the React/MSW test foundation with fixtures, route render harness, auth/form schema tests, and server-list route tests.
+- Implemented the first shell/navigation/update UX pass: sidebar server switcher, disabled navigation without a selected server, vanilla-server Mods hiding, topbar breadcrumbs/status/actions, command palette, update polling, confirmation, and toasts.
+- Implemented the first overview, console, and files route pass: runtime cards, recent logs, installed-mod preview, console merge/filter/auto-scroll/command submit, file breadcrumbs, text-file gating, dirty editor Store, discard confirmation, and save/open/copy feedback.
+- Implemented the first players, mods, and Modrinth/modpack browsing pass: player state, running-only online polling, search/filter, player mutations with optimistic rollback, installed-mod list/search/selection/bulk delete, Modrinth mod search/install, and basic modpack search/install/replace confirmation.
+- Implemented the first backups, playit, properties, settings, Java manager, and change-password route/form pass and verified the panel still passes build, typecheck, lint, and tests.
+- Fixed the integrated TanStack Store helper typing so action Stores and plain UI Stores both work in route code.
+- Fixed integrated TanStack Form typing in the first backup config, server properties, and change-password forms.
+- Verified `bun run test` succeeds for `apps/panel`.
+
+In progress:
+
+- Workstream B TanStack state foundation. The panel now has direct TanStack Store dependencies, narrow client/UI Store modules, expanded `["session", ...]` query keys, typed API clients for the Vue API surface, query/mutation helpers for servers, files/logs/mods, players, backups, playit, Java/update, and Modrinth, plus Store/query-key ownership tests. Mutation invalidation tests and route cleanup for any raw query-key arrays are still needed before the Workstream B exit gate is complete.
+- Workstream C shell/navigation/update UX. The first implementation pass is in place and the integrated panel gates pass; fixture verification for no-server, selected-server, vanilla-server, and update-available states is still needed before the exit gate is complete.
+- Workstreams E/F overview, console, and files. The first implementation pass is in place and the integrated panel gates pass; parity tests for all status states and the files dirty-editor safety contract are still needed before the exit gates are complete.
+- Workstreams G/H players, mods, and modpacks. The first implementation pass is in place and the integrated panel gates pass; dependency, compatibility, missing-file continuation, uncertain-side continuation, and mutation/session-expiry tests are still needed before the exit gates are complete.
+- Workstreams I/J backups, playit, properties, settings, Java, and password. The first implementation pass is in place and the integrated panel gates pass; parity review plus job/form/progress tests are still needed before the exit gates are complete.
+- Full shadcn component installation and tuning. The panel currently has starter local components, not the full shadcn component set.
+- Auth UI parity beyond login/setup shell polish, such as eventual password-change modal behavior.
+- Route parity. First-pass route implementations now exist across the major server pages, but parity gaps and tests remain before cutover.
+- Release cutover. Production still serves `apps/frontend/dist`.
+
+Current build snapshot:
+
+```text
+apps/panel production build: passes
+apps/panel type check: passes
+apps/panel lint: passes
+apps/panel tests: pass
+current JS bundle: 654.52 kB, 188.34 kB gzip
+current CSS bundle: 33.94 kB, 7.05 kB gzip
+build note: Vite warns the main JS chunk is larger than 500 kB; route-level code splitting is now a required performance follow-up before cutover.
+```
+
+## Direction
+
+Create a new app at `apps/panel`.
+
+Keep `apps/frontend` in place until the panel reaches feature parity. The Vue app remains useful as the reference implementation while each screen is ported.
+
+When the panel is ready, change production serving and release packaging from `apps/frontend/dist` to `apps/panel/dist`. Until then, the backend should continue serving the current frontend.
+
+## Stack
+
+Use this stack for `apps/panel`:
+
+- Vite
+- React
+- TypeScript
+- TanStack Router
+- TanStack Query
+- TanStack Store
+- TanStack Form
+- TanStack Hotkeys
+- Optional TanStack DB adapter after parity if normalized live collections prove useful
+- Optional TanStack Table, Virtual, and Pacer for complex tables, large lists, and debounced/throttled UI
+- Zod
+- Tailwind CSS v4
+- shadcn/ui with Base UI primitives
+- lucide-react
+- sonner for toast notifications
+
+The website already uses the visual direction we want: Base UI, shadcn, Tailwind v4, lucide icons, Geist, and the orange/neutral Fabricator theme. The panel should reuse that theme vocabulary, then tune it for a dense application UI instead of a marketing page.
+
+## shadcn Strategy
+
+Install shadcn in `apps/panel` and add the full component set early.
+
+The important point is that shadcn components become local source code. We should use that as the starting system, then adjust the local components to match Fabricator's product feel.
+
+Use shadcn for:
+
+- buttons
+- inputs
+- input groups
+- selects
+- dropdown menus
+- breadcrumbs
+- dialogs
+- sheets
+- tabs
+- accordions
+- command palette
+- sidebar
+- tables
+- cards
+- badges
+- tooltips
+- popovers
+- switches
+- sliders
+- skeletons
+- progress
+- empty states
+- alerts
+
+After install, tune the local shadcn files rather than wrapping everything in another design system. For example:
+
+- `button.tsx` can carry Fabricator-specific size, radius, loading, and icon defaults.
+- `accordion.tsx` can differ from the marketing site if the panel needs denser disclosure rows.
+- `select.tsx` and `dropdown-menu.tsx` should be tuned for keyboard-heavy operations.
+- `sidebar.tsx` should become the foundation for Fabricator's app chrome.
+- `breadcrumb.tsx` should use TanStack route matches and server names.
+
+Keep changes token-driven. Prefer semantic classes such as `bg-background`, `text-muted-foreground`, `border-border`, and `text-primary` over raw color utilities.
+
+## App Boundary
+
+`apps/panel` is the product dashboard. `apps/website` remains the public marketing and docs site.
+
+Do not fold the installed panel into the website app. The panel should stay a standalone Vite SPA served by Flask, because that keeps native installs, Docker images, Windows builds, and self-update simple.
+
+The production contract should eventually be:
+
+```text
+apps/panel/dist -> bundled as frontend/dist or served directly as panel/dist
+Flask fallback route -> index.html
+/api/* -> JSON API only
+```
+
+During migration, keep the current contract:
+
+```text
+apps/frontend/dist -> served by Flask
+apps/panel -> development app only
+```
+
+## Update Safety Contract
+
+The in-app update path must keep working exactly as it does today. A user should be able to click update, let `tools/update.sh` run the release installer, and come back to the same backend, data, settings, auth mode, server records, playit state, Java installs, backups, and update service behavior. The only intended difference at panel cutover is the improved UI served from the same backend.
+
+For the first panel release, keep the installed runtime layout compatible:
+
+```text
+release CI builds apps/panel/dist
+release artifact is still named frontend-dist
+Linux tarball still contains frontend/dist
+Docker runtime still copies the UI to ./frontend/dist
+PyInstaller still bundles frontend/dist
+Flask still serves frontend/dist
+```
+
+This avoids changing both the UI implementation and the runtime static path in one release. A later cleanup release can rename the runtime bundle from `frontend/dist` to `panel/dist` if it is still worth the churn.
+
+Before changing release packaging, test these update cases:
+
+- Existing native install updates from a Vue-dashboard release to a panel-dashboard release.
+- Existing Docker install pulls the new image and keeps the `/data` volume intact.
+- Existing Windows build bundles the panel as `frontend/dist` and still serves deep links.
+- Auth-enabled install remains logged-in/session-compatible where expected; logged-out users land on `/login`.
+- First-boot install with no password still lands on `/setup`.
+- Auth-disabled install still bypasses the guard.
+- Existing deep links such as `/server/<id>/overview` still work after update and browser refresh.
+- Unknown `/api/*` paths still return JSON 404 instead of the SPA HTML.
+- Unknown non-API app routes still fall back to `index.html`.
+- Failed update attempt leaves the previous installed app intact, or at minimum keeps `fabricator.service` restartable with clear update logs.
+
+Release cutover should be blocked unless the new panel passes the same smoke flows against a packaged artifact, not only against the Vite dev server.
+
+## Testing Without Local Minecraft Servers
+
+Do not require contributors or release verification to create real Minecraft servers on their host machine. Most panel work can and should be tested with deterministic fixtures.
+
+Use four layers:
+
+1. UI fixture mode in `apps/panel`.
+   Mock `/api/*` responses with a browser-level mock layer such as MSW, backed by checked-in auth, setup, server, player, mod, file, backup, playit, and update fixtures. This is the fastest loop for styling, navigation, forms, empty states, loading states, and error states.
+
+2. Backend fixture mode.
+   Run the Flask backend against a temporary data directory and fake server records, with background schedulers and real process starts disabled. This verifies API shape, auth cookies, SPA fallback, and route guards without creating or launching Minecraft.
+
+3. Packaged Docker smoke tests.
+   Build the same artifact shape users receive, copy `apps/panel/dist` into runtime `frontend/dist`, mount a disposable `/data` volume, seed fixture data, and run Playwright against the Flask-served panel. This verifies update safety, refresh/deep-link behavior, static serving, and auth/session behavior in an install-like environment.
+
+4. Narrow real-server tests.
+   Keep true Minecraft create/start/stop tests as opt-in release or nightly checks in an isolated container or VM. They should not be part of the normal panel UI development loop.
+
+Required panel smoke coverage:
+
+- `/` decides once between app, setup, and login from `/api/auth/status`.
+- Unauthenticated app routes redirect straight to `/login?redirect=...`.
+- First-boot installs redirect straight to `/setup`, not login then setup.
+- Auth-disabled installs enter the app without login.
+- Login and setup mutate auth state locally and navigate client-side without a full page reload.
+- Server deep links refresh correctly from the packaged Flask server.
+- Empty server list, populated server list, stopped server, running server, installing server, and API error states all render from fixtures.
+- Update status and update-trigger UI render from fixtures without modifying the host machine.
+
+## Query Cache and Auth Boundaries
+
+Use predictable query-key roots so auth, logout, and future team auth stay easy to reason about:
+
+```text
+["auth", "status"]       install/auth status used by route guards
+["session", ...]         protected data for the active authenticated context
+```
+
+Rules:
+
+- Login and setup set `["auth", "status"]` to authenticated immediately after a successful mutation.
+- Logout clears all `["session", ...]` queries, clears mutation state, writes unauthenticated auth status, then navigates to `/login`.
+- Global `401` handling uses the same session-clearing path as logout before redirecting.
+- Route data must use the `queryKeys` helpers, not ad hoc string arrays.
+- Future team/org auth should extend the session root instead of changing the logout mechanism, for example `["session", teamId, "servers"]` or `["session", orgId, "servers"]`.
+- Switching team/org/account should clear the previous scoped `["session", ...]` data before loading the next scope, while keeping `["auth", "status"]` intact.
+- Do not store protected server data under `["auth", ...]`; auth keys are only for authentication/install status.
+
+## Current Vue Inventory
+
+The current dashboard in `apps/frontend` has these major pieces:
+
+| Area | Vue source | Behavior that must survive |
+| --- | --- | --- |
+| App root | `App.vue` | global create-server modal, create success toast, navigate to new server |
+| Router/auth | `router/index.js`, `stores/auth.js`, `LoginPage.vue`, `SetupPage.vue` | setup lock, login redirects, auth-disabled passthrough, status failure fallback |
+| App shell | `layouts/RootLayout.vue`, `layouts/ServerLayout.vue`, `components/layout/*` | sidebar, server switcher, topbar, update polling, server polling, route-owned log polling |
+| Server list | `views/Servers.vue` | load servers, redirect to first server, empty state create CTA |
+| Create server | `components/modals/ServerCreateModal.vue` | loader/version selection, Java preflight, EULA, async install progress, optional modpack install |
+| Server store | `stores/server.js` | server detail state, status labels, settings defaults, mods/logs/files, start/stop/restart, modpack install flow |
+| Overview | `views/server/ServerOverviewPage.vue` | runtime stat cards, log preview, active modpack, playit tunnel preview, quick links |
+| Console | `views/server/ServerConsolePage.vue` | stdout/stderr merge, level normalization, filters, auto-scroll, running-only command submission |
+| Players | `stores/players.js`, `views/server/ServerPlayersPage.vue`, `components/players/*` | state load, online polling while running, whitelist/op/ban/kick/IP-ban mutations, optimistic rollback |
+| Mods | `views/server/ServerModsPage.vue`, `components/modals/ModBrowserModal.vue` | installed-mod list, local search, bulk delete, Modrinth search/install, dependencies, already-installed checks |
+| Modpacks | `components/modals/ModpackBrowserModal.vue`, `useModpackImport.js`, modpack paths in `stores/server.js` | URL/search import, project version resolution, replace confirmation, missing file continuation, uncertain side decisions |
+| Files | `views/server/ServerFilesPage.vue` | breadcrumbs, browse folders, text-file gating, dirty editor, unsaved-change confirmation, copy/open feedback |
+| Backups | `stores/backups.js`, `views/server/ServerBackupsPage.vue`, `components/backups/*`, backup modals | config CRUD, summary, snapshot table, quick backup, restore mode, active job polling, world import upload progress |
+| playit | `stores/playit.js`, `views/server/ServerPlayitPage.vue` | daemon-level status, ref-counted polling, claim/start/stop/reset, tunnel matching |
+| Properties | `views/server/ServerSettingsPage.vue` | dirty settings form, basic/expert mode, running-server edit guard, all server property defaults |
+| Settings | `views/server/ServerGeneralSettingsPage.vue`, `components/settings/*` | autostart, Java status/install/remove, password change, reported version fallback |
+| Shared UI | `components/ui/*`, `components/modals/*`, `useToast.js`, utilities | theme, buttons, form rows, cards, status pills, confirms, toast behavior, format helpers |
+
+Audit coverage:
+
+- All files under `apps/frontend/src/api/`, `components/`, `composables/`, `layouts/`, `router/`, `stores/`, `utils/`, and `views/` must be accounted for before a feature is marked ported.
+- The current frontend has 58 source files in `apps/frontend/src`; this plan treats every one as either a direct port, a behavior source, or a legacy implementation to replace with shadcn/Base UI.
+- The largest UI/control surfaces are `components/modals/ServerCreateModal.vue` and `views/server/ServerSettingsPage.vue`. They need dedicated parity tests before replacement.
+- Every custom Vue button, modal, form row, panel, status pill, toggle, search result card, stat card, sidebar item, server switcher item, table row, and toast must be mapped to a local shadcn/Base UI component or a documented Fabricator wrapper around one.
+
+The React panel currently has:
+
+| Area | Current React status |
+| --- | --- |
+| App scaffold | Vite React app exists in `apps/panel` and builds. |
+| Routing | TanStack Router route tree exists for all target URLs. Server child pages are placeholders. |
+| Auth | Login/setup guards, global 401 handling, safe redirects, and logout session clearing are implemented. |
+| Query cache | Auth status and initial server queries exist with a `["session", ...]` cache root. |
+| UI system | Starter button/card/input/badge and Fabricator color tokens exist. Full shadcn set is not installed/tuned yet. |
+| Server functionality | Server list redirect exists. Create server, install, route pages, players, mods, files, backups, playit, settings, Java, and change password still need real ports. |
+| Tests | No panel parity test suite exists yet. |
+
+## Detailed Vue Surface Map
+
+Use this as the implementation checklist. Do not remove the Vue implementation until each row has a React equivalent, tests, and a parity sign-off.
+
+### Shared UI Components
+
+| Vue source | Current role | React/shadcn replacement target | Must preserve |
+| --- | --- | --- | --- |
+| `components/ui/AppButton.vue` | primary/ghost/danger/warning buttons, loading spinner, sm/md sizes | local `Button` with variants plus `Spinner`; icons use lucide with `data-icon` | disabled/loading semantics, `aria-busy`, compact dimensions, Fabricator colors |
+| `components/ui/FormField.vue` | label, hint, described-by ids | shadcn `Field`, `FieldGroup`, `FieldLabel`, `FieldDescription`, `FieldError` | generated ids, accessible hints, validation messages |
+| `components/ui/Panel.vue` | bordered operational card with optional header action and flush body | shadcn `Card` composition or local `Panel` wrapper around `Card` | compact header, uppercase muted title treatment, optional flush body |
+| `components/ui/StatCard.vue` | small metric card | shadcn `Card` or `StatCard` wrapper | stable metric layout, muted labels, optional trend/detail text |
+| `components/ui/StatusPill.vue` | running/stopped/pending/installing/failed status chip | shadcn `Badge` plus status-dot wrapper | exact status labels/colors, optional sublabel |
+| `components/ui/ToggleRow.vue` | labeled switch row | shadcn/Base UI `Switch` inside `Field` | accessible label, disabled state, compact row layout |
+| `components/ui/SearchResultCard.vue` | Modrinth/modpack result card | shadcn `Card`/`Button` composition | icon/image, title, meta, selected/hover states, install action |
+
+Shared UI replacement rules:
+
+- Install shadcn components as local source and tune them; do not create one-off styled controls when shadcn/Base UI has an equivalent.
+- Use Base UI-backed shadcn primitives for dialogs, selects, dropdowns, switches, tooltips, popovers, command palette, and accessible composition.
+- Keep Fabricator's existing visual language: dark neutral surfaces, orange primary, compact rows, crisp borders, small radii, restrained animation, and existing status semantics.
+- Preserve the old layout while replacing internals. The goal of this migration is parity first, not a redesign.
+
+### Layout and Navigation Components
+
+| Vue source | Current role | React/shadcn replacement target | Must preserve |
+| --- | --- | --- | --- |
+| `App.vue` | global create-server modal, global toast host, navigate after create | app provider + global modal store + sonner toaster | modal available from all routes, create success/warning toasts, route to created server |
+| `layouts/RootLayout.vue` | unauthenticated/root outlet | TanStack Router root route | outlet behavior |
+| `layouts/ServerLayout.vue` | server route shell and polling owner | `/server/$serverId/route.tsx` with Query polling | server id sync, server status polling, route-scoped log polling, modpack progress polling, cleanup on route/server change |
+| `components/layout/AppSidebar.vue` | brand, nav, no-server chip, lock, update pill/confirm | shadcn `Sidebar`, `Tooltip`, `AlertDialog`, lucide icons | disabled nav without server, hide Mods for vanilla, update polling cadence, update result toasts |
+| `components/layout/AppTopbar.vue` | page title, status pill, start/stop/restart controls | topbar using `Breadcrumb`, `Badge`, `Button` | page titles, status subtitle, running/pending/installing action disable rules |
+| `components/layout/ServerSwitcher.vue` | server dropdown and create action | shadcn `Command`/`Popover` or `DropdownMenu` | current server fallback, status in list, switch route, create entry |
+| `components/common/ToastContainer.vue` | toast mount | `sonner` toaster | success/warning/error/info semantics and placement |
+| `components/common/ToastNotification.vue` | individual toast styling | sonner toast variants | title/message/action readability |
+
+### Modal and Dialog Components
+
+| Vue source | Current role | React/shadcn replacement target | Must preserve |
+| --- | --- | --- | --- |
+| `components/modals/BaseModal.vue` | generic overlay, sizes, close on backdrop/Escape, body scroll lock | shadcn/Base UI `Dialog` wrapper | small/medium/large/xlarge sizing, title, close button, Escape/backdrop behavior, scrollable body |
+| `components/modals/ConfirmModal.vue` | warning/danger/info confirmations | shadcn `AlertDialog` wrapper | icon semantics, loading confirm, extra slot/progress area |
+| `CompatibilityConfirmModal.vue` | choose compatible Modrinth version | `Dialog` + `RadioGroup`/`Command`/`Button` | version list, selected version, disabled confirm until selected |
+| `DeleteBackupConfigModal.vue` | config deletion and purge option | `AlertDialog` + `Checkbox` | purge explanation, retained/deleted file counts, safe confirm |
+| `ImportWorldModal.vue` | world archive upload | `Dialog` + `Input` file + `Progress` | selected file validation, upload progress, cancel upload, job-active state |
+| `JavaInstallModal.vue` | Java preflight/install state machine | `Dialog` + `Progress` + `Alert` | checking/needs_java/downloading/confirming/installing/done/error states, task polling, start server after install |
+| `ModBrowserModal.vue` | Modrinth mod browser | `Dialog` + `Input` + `Select` + `Command`/cards | search, sort, version filter, loader display, result selection, install, compatibility/dependency dialogs |
+| `ModDependencyModal.vue` | dependency install choice | `AlertDialog` | install with deps, main only, cancel |
+| `ModSideDecisionModal.vue` | server/client side decisions for uncertain modpack files | `Dialog` + `ToggleGroup` + `Button` | API check-all/single, per-mod server/client choice, unresolved count gating |
+| `ModpackBrowserModal.vue` | Modrinth modpack search/import | `Dialog` + `Tabs`/`RadioGroup` + cards | search/link modes, resolve by URL, selected pack details, install action |
+| `QuickBackupModal.vue` | ad hoc backup form | `Dialog` + TanStack Form + `Checkbox` | storage path, compress/flush/shutdown, job-active disabling |
+| `RestoreModeModal.vue` | restore strategy choice | `AlertDialog` + `RadioGroup` | in-place vs reset, active job disabling |
+| `ServerCreateModal.vue` | create/install wizard | `Dialog` or `Sheet` + TanStack Form wizard | loader/version reloads, Java preflight, EULA, snapshot toggle, port/memory/game settings, install progress, modpack-on-create continuation |
+
+Dialog replacement rules:
+
+- Every dialog must have an accessible title, even if visually hidden.
+- Destructive operations use `AlertDialog`, not plain `Dialog`.
+- Progress states use shadcn `Progress` and `Alert`, not custom progress markup unless a wrapped Fabricator primitive is created.
+- Preserve the current modal sizes and dense internal spacing before any future redesign.
+
+### Feature Components
+
+| Vue source | Current role | React/shadcn replacement target | Must preserve |
+| --- | --- | --- | --- |
+| `components/backups/BackupStatsStrip.vue` | backup summary stats | stat card row | snapshot count, total bytes, last snapshot, next run |
+| `components/backups/ManageConfigsPanel.vue` | side panel for backup configs and schedule form | shadcn `Sheet` + TanStack Form + `ScrollArea` | create/edit/list configs, run selected config, delete request, retention/exclusions/schedule/toggles |
+| `components/backups/SnapshotsTable.vue` | snapshots table and download/delete/restore actions | shadcn `Table`, optional TanStack Table later | empty state, download tar/zip links, restore/delete emits |
+| `components/players/IpBansPanel.vue` | expandable IP ban management | `Collapsible` + form controls | add/remove IP bans, reason text, remove confirmation |
+| `components/players/PlayerAvatar.vue` | player avatar/fallback | shadcn `Avatar` | UUID/name image source, fallback initial, failed-image reset |
+| `components/players/PlayerRow.vue` | player list row | row/card composition | online/op/banned/whitelisted states, actions slot/controls |
+| `components/settings/ChangePasswordPanel.vue` | password change form | `Card` + TanStack Form | current/new/confirm fields, 8-char validation, local errors |
+| `components/settings/JavaManagerPanel.vue` | Java status/install/remove controls | `Card` + `Dialog` + `Progress` | system/managed Java display, install trigger, remove confirm |
+
+### Pages and Route Screens
+
+| Vue source | Current role | React route | Must preserve |
+| --- | --- | --- | --- |
+| `views/LoginPage.vue` | operator login | `/login` | wrong password stays local, redirect query honored, autofocus |
+| `views/SetupPage.vue` | first-run password setup | `/setup` | confirm match, min length, autofocus, replace to app |
+| `views/Servers.vue` | server list/empty/redirect | `/` | first server redirect, retry on load error, create CTA |
+| `views/server/ServerOverviewPage.vue` | overview dashboard | `/server/$serverId/overview` | stat cards, active modpack, performance, logs preview, installed mods preview, quick actions |
+| `views/server/ServerConsolePage.vue` | console | `/server/$serverId/console` | log merge/normalization, filters, auto-scroll, command gating |
+| `views/server/ServerPlayersPage.vue` | players | `/server/$serverId/players` | search/filter, online map, whitelist/op/ban state, inline reason entry, add player |
+| `views/server/ServerModsPage.vue` | mods | `/server/$serverId/mods` | active modpack card, installed mod list, search, selection, bulk delete, browse mods/modpacks |
+| `views/server/ServerFilesPage.vue` | file browser/editor | `/server/$serverId/files` | breadcrumbs, up button, folder/file rows, text gating, dirty editor, discard confirm |
+| `views/server/ServerBackupsPage.vue` | backups | `/server/$serverId/backups` | configs, summary, active job banner, snapshots, quick backup, restore, import world |
+| `views/server/ServerPlayitPage.vue` | playit daemon/tunnel UI | `/server/$serverId/playit` | claim/running/stopped/error/unsupported states, matched tunnel, start/stop/reset |
+| `views/server/ServerSettingsPage.vue` | Minecraft properties | `/server/$serverId/properties` | all default settings, basic/expert grouping, dirty state, running edit guard, delete server confirm |
+| `views/server/ServerGeneralSettingsPage.vue` | general settings | `/server/$serverId/settings` | autostart, Java manager, password panel, current/reported version |
+
+### Stores, API Modules, Composables, and Utilities
+
+| Vue source | React target | Must preserve |
+| --- | --- | --- |
+| `api/auth.js` | `api/auth.ts`, `queries/auth.ts` | status/login/logout/setup/change-password, skip global redirect where needed |
+| `api/client.js` | `api/client.ts` | query params, JSON parsing, `ApiError`, global 401 handler |
+| `api/servers.js` | `api/servers.ts`, `queries/servers.ts`, `queries/files.ts`, `queries/java.ts`, `queries/update.ts` | all server CRUD/action/file/log/Java/update endpoints |
+| `api/modrinth.js` | `api/modrinth.ts`, `queries/modrinth.ts` | search, details, versions, install, categories/loaders/game versions, modpack install/progress |
+| `api/players.js` | `api/players.ts`, `queries/players.ts` | whitelist/op/ban/kick/IP-ban state and mutations |
+| `api/backups.js` | `api/backups.ts`, `queries/backups.ts` | configs, snapshots, summary, jobs, restore, quick backup, world upload progress |
+| `api/playit.js` | `api/playit.ts`, `queries/playit.ts` | daemon status/start/stop/reset |
+| `api/throttle.js` | TanStack Pacer or tiny utility | Modrinth backoff/limit behavior |
+| `stores/auth.js` | Query auth status + auth-session helpers | checked-state behavior, failure fallback |
+| `stores/server.js` | Query + Store modules | server status display, defaults, mods/logs/files, actions, modpack state machines |
+| `stores/players.js` | Query + optimistic mutations | online polling, rollback, state load |
+| `stores/backups.js` | Query + backups UI Store | draft config, active jobs, restore/import state |
+| `stores/playit.js` | Query + scoped polling | ref-counted polling semantics where multiple consumers exist |
+| `composables/useToast.js` | sonner wrapper | title/message/type ergonomics |
+| `composables/useModpackImport.js` | hook + Store | search/link import, project resolution, error state |
+| `utils/clipboard.js` | utility hook | copy feedback |
+| `utils/enrichInstalledModsModrinth.js` | query helper/cache utility | local jar enrichment, cache invalidation after delete/replace |
+| `utils/format.js` | `lib/format.ts` | bytes, duration, dates, numbers |
+| `utils/getEffectiveStatus.js` | `lib/server-status.ts` | persisted in-flight status beats runtime stopped |
+| `utils/installedModDisplay.js` | `lib/mods.ts` | display title/icon fallback |
+| `utils/modrinthJarMatch.js` | `lib/modrinth.ts` | jar/project matching |
+
+### Explicit Future Items
+
+Do not block parity on new interaction models that do not exist in Vue today:
+
+- tree components for richer file browsing
+- richer code editor/file editor beyond the current textarea-level behavior
+- future visual server topology or dependency graph components
+- advanced table virtualization unless a current list is measurably too large
+- new dashboard layouts beyond preserving the current operational UI
+
+Capture these as follow-up enhancements after the React panel has feature parity and passes the Vue parity tests.
+
+## TanStack Primitive Decisions
+
+Use TanStack primitives deliberately. The goal is a small set of deep modules with clear interfaces, not a new global store wrapped around every feature.
+
+| Primitive | Use in Fabricator panel | Why |
+| --- | --- | --- |
+| TanStack Router | Required | Own URL shape, route guards, params, search params, route-level loading, route context, and route code splitting. |
+| TanStack Query | Required | Own server state: backend reads, mutations, cache invalidation, polling, retries, and background refresh. |
+| TanStack Store | Required for client/UI state | Replace Pinia-style UI state where state is not server-owned: command palette, modal host, selected mods, file editor dirty state, route-local wizard state, hotkey scopes, sidebar UI state. |
+| TanStack Form | Required for forms | Every form should have typed validation and submission state with Zod schemas. |
+| Zod | Required | Parse risky backend responses and validate every form. |
+| TanStack Hotkeys | Required but scoped | Command palette, route navigation, refresh/search shortcuts, safe submit shortcuts. No destructive single-key actions. |
+| TanStack DB | Deferred, adapter candidate | Consider after Query ports if normalized live collections would simplify servers/mods/players/backups. It should not block parity because the backend is REST and current screens can be cleanly represented by Query plus Store. |
+| TanStack Table | Use when table behavior gets real | Backups snapshots, players, mods, and files can use it when sorting/filtering/selection complexity justifies it. |
+| TanStack Virtual | Optional | Use only if large files/mods/players/snapshot lists make rendering expensive. |
+| TanStack Pacer | Optional | Use for debounced Modrinth search, file search, and throttled high-frequency UI actions if local helpers become messy. |
+
+State ownership rules:
+
+- Server-owned data belongs in TanStack Query.
+- Client-only UI state belongs in TanStack Store.
+- Form draft/validation state belongs in TanStack Form.
+- URL-visible state belongs in TanStack Router search params.
+- Normalized collection state may belong in TanStack DB only after a feature proves it needs local relational queries/live collection updates.
+
+Initial Store modules:
+
+```text
+src/stores/app-store.ts          command palette, global modal host, sidebar state
+src/stores/server-ui-store.ts    selected server UI state, active modal ids, transient action state
+src/stores/file-editor-store.ts  open file, content, original content, dirty/discard state
+src/stores/mods-ui-store.ts      selected mod paths, search text, pending mod/modpack dialogs
+src/stores/backups-ui-store.ts   selected snapshot/config, upload progress, restore modal state
+src/stores/hotkeys-store.ts      active scopes and command palette registration metadata
+```
+
+Keep Stores narrow. If a Store starts mirroring backend data, move that data back into Query or a DB collection.
+
+TanStack DB evaluation gate:
+
+- Do not introduce DB in the first parity port.
+- Re-evaluate DB when at least two pages need the same normalized data with different live projections, such as server summaries plus current server detail plus sidebar status, or player state plus online player updates plus per-row mutations.
+- If adopted, wrap DB collections behind `src/data/collections/*` so route code does not know whether data came from Query-only or Query-backed collections.
+
+## Test-First Parity Strategy
+
+Create tests against the Vue behavior before porting each feature, then run equivalent tests against the React panel. This is the migration safety net.
+
+Test layers:
+
+| Layer | Target | Purpose |
+| --- | --- | --- |
+| Backend contract tests | `apps/backend/tests` | Prove API responses, auth, static fallback, and update endpoints stay stable. |
+| Vue parity capture tests | existing `apps/frontend` served against mocked/fixture backend | Record current visible behavior before porting. These can be temporary but must live long enough to catch regressions during the port. |
+| React unit tests | `apps/panel/src/**/*.test.ts(x)` | Test pure utilities, Zod schemas, query-key invalidation helpers, Store modules, and form schemas. |
+| React route tests | panel with MSW fixtures | Test auth guards, navigation, loading/empty/error states, form flows, and mutation invalidation. |
+| Playwright visual/flow tests | Vue first, then panel | Exercise user workflows and compare screenshots where layout parity matters. |
+| Packaged smoke tests | Docker/Flask serving built panel as `frontend/dist` | Prove install/update/static serving/deep links work like a real user install. |
+
+Fixture strategy:
+
+- Add shared fixture payloads for auth, servers, server detail, logs, files, mods, Modrinth, players, backups, playit, Java, and update status.
+- Use those fixtures for Vue parity tests and React route tests where possible.
+- Do not require a real Minecraft server for ordinary panel tests.
+- Keep a tiny number of opt-in real-server tests for release/nightly only.
+
+Minimum tests before a feature is considered ported:
+
+- Happy path renders the same core information as Vue.
+- Loading, empty, and API error states render.
+- Main mutation invalidates or updates the correct cache/store state.
+- Auth/session expiry from that route clears protected data and redirects correctly.
+- Keyboard and focus behavior works for dialogs/forms.
+- Mobile/narrow viewport has no clipped controls or unusable layout.
+
+Test migration order:
+
+1. Auth/setup/login/logout guards.
+2. Server list and create-server wizard.
+3. Server shell polling and status actions.
+4. Overview and console.
+5. Files dirty-editor flow.
+6. Players optimistic mutations.
+7. Mods and Modrinth install dialogs.
+8. Modpack continuation flows.
+9. Backups jobs and world import upload progress.
+10. playit daemon state.
+11. Properties/settings/Java/password forms.
+12. Packaged update and static serving.
+
+## Migration Workstreams
+
+Use feature-sliced PRs. Every workstream must leave the panel building and must not change the shipped Vue dashboard until cutover.
+
+### Active Execution Board
+
+Last updated: 2026-07-15.
+
+Parallel agents are working against disjoint ownership areas. A workstream only moves to complete when its exit gate has passed and the panel still passes typecheck, lint, tests, and build as applicable.
+
+| Workstream | Owner | Status | Owned areas |
+| --- | --- | --- | --- |
+| A: Baseline Tests and Fixtures | sub-agent Confucius | Partially landed; exit gate open | React/MSW test foundation passes; Vue parity capture tests still missing |
+| B: TanStack State Foundation | sub-agent Hypatia | Foundation landed; exit gate open | Store/query/API foundation passes integrated gates; mutation invalidation tests and raw-key cleanup still missing |
+| C: Shell, Navigation, and Update UX | sub-agent Mencius | Implementation landed; exit gate open | Shell/update UX passes integrated gates; fixture state coverage still missing |
+| D/E/F: Overview, Console, Files | sub-agent Halley | Implementation landed; exit gates open | Overview/console/files pass integrated gates; status/dirty-editor parity tests still missing |
+| G/H: Players, Mods, Modpacks | sub-agent Jason | Implementation landed; exit gates open | Players/mods foundations pass integrated gates; advanced Modrinth/modpack parity tests still missing |
+| I/J: Backups, playit, Properties, Settings, Java, Password | sub-agent Gauss | Implementation landed; exit gates open | Route/form foundations pass integrated gates; parity/job/form/progress tests still missing |
+
+Coordination rules:
+
+- Workers must not change the shipped Vue implementation except for read-only parity reference.
+- Workers must not mark a workstream complete unless the exit gate passes.
+- If multiple workers need the same primitive, prefer a small shared shadcn/Base UI wrapper and note the dependency.
+- The main integration pass owns conflict resolution and final status updates.
+
+### Workstream A: Baseline Tests and Fixtures
+
+Deliverables:
+
+- Add fixture backend or MSW handlers for every current API area.
+- Add Vue parity tests for the highest-risk current flows.
+- Add React test setup with the same fixture payloads.
+- Add a route-test harness that can render the panel with Router, Query, Store, and MSW.
+- Add CI scripts for panel typecheck, lint, unit tests, route tests, and build.
+
+Exit gate:
+
+- Auth, server list, and one representative server route are tested in both Vue and React harnesses.
+
+### Workstream B: TanStack State Foundation
+
+Deliverables:
+
+- Install `@tanstack/store` and the React adapter.
+- Add Store modules for app UI, server UI, file editor, mods UI, backups UI, and hotkey scopes.
+- Expand `queryKeys` for every server feature under `["session", ...]`.
+- Add typed API clients and Zod schemas for all existing Vue API modules.
+- Add mutation helpers that encode invalidation rules in one place.
+- Add Store tests and query invalidation tests.
+
+Exit gate:
+
+- All server-owned data has a query-key owner.
+- All client-only cross-route state has a Store owner.
+- No route imports raw string query keys.
+
+### Workstream C: Shell, Navigation, and Update UX
+
+Deliverables:
+
+- Full sidebar with server switcher.
+- Breadcrumbs from router matches plus server query data.
+- Topbar server status/actions.
+- Command palette and hotkeys.
+- Update status polling, update confirmation, update result toasts.
+- Global modal/dialog host.
+
+Exit gate:
+
+- Shell matches Vue behavior across no-server, server-selected, vanilla-server, and update-available states.
+
+### Workstream D: Server Creation and Install
+
+Deliverables:
+
+- TanStack Form create-server wizard.
+- Loader/game-version loading and reload behavior.
+- Java preflight.
+- EULA confirmation.
+- Async install progress polling.
+- Optional modpack selection during create.
+- Navigate to new server overview after create.
+
+Exit gate:
+
+- Create flow passes fixture tests for vanilla, modded, Java warning, install failure, and modpack continuation.
+
+### Workstream E: Core Server Pages
+
+Deliverables:
+
+- Server layout polling.
+- Overview page.
+- Console page with filters, auto-scroll, command submission.
+- Start/stop/restart/install actions.
+
+Exit gate:
+
+- Running/stopped/pending/installing/failed statuses match Vue display rules, including persisted in-flight status precedence.
+
+### Workstream F: Files
+
+Deliverables:
+
+- File browser with breadcrumbs.
+- Text file gating.
+- File editor Store.
+- Dirty-state confirm.
+- Save/copy/open feedback.
+
+Exit gate:
+
+- Tests prove unsaved changes cannot be lost silently.
+
+### Workstream G: Players
+
+Deliverables:
+
+- Player state query.
+- Online polling only while server is running.
+- Whitelist/op/ban/kick/IP-ban mutations.
+- Optimistic updates with rollback.
+- Player rows and avatars.
+
+Exit gate:
+
+- Mutation tests cover success, backend failure, and session expiry.
+
+### Workstream H: Mods and Modpacks
+
+Deliverables:
+
+- Installed mods list/search/selection/bulk delete.
+- Modrinth browser.
+- Dependency dialog.
+- Compatibility dialog.
+- Mod side decision dialog.
+- Modpack browser/import.
+- Missing-files continuation.
+- Uncertain client/server-side continuation.
+
+Exit gate:
+
+- Modpack install flow tests cover clean install, backup option, missing files, uncertain sides, Java warning, and failed install.
+
+### Workstream I: Backups and World Import
+
+Deliverables:
+
+- Backup summary/config/snapshot queries.
+- Manage-config form.
+- Snapshot table.
+- Quick backup.
+- Restore mode dialog.
+- Delete config/snapshot confirmations.
+- World import upload progress and job polling.
+
+Exit gate:
+
+- Job polling stops on terminal states and the UI surfaces purge/retained-file results.
+
+### Workstream J: playit, Properties, Settings, Java, Password
+
+Deliverables:
+
+- playit daemon status with start/stop/reset/claim flows.
+- Properties form with basic/expert sections and all `defaultSettings` mappings.
+- General settings page.
+- Autostart mutation.
+- Java manager with install progress and managed-Java removal.
+- Change password form.
+
+Exit gate:
+
+- Properties dirty state, running-server edit guard, Java progress, and password errors match Vue behavior.
+
+### Workstream K: Cutover and Cleanup
+
+Deliverables:
+
+- Build `apps/panel/dist` in release CI but package as `frontend/dist`.
+- Update Dockerfile, Windows bundling, installer/update scripts, and docs.
+- Run packaged Docker smoke tests.
+- Run `fabricator update` from Vue release to panel release in a fixture install.
+- Keep `apps/frontend` for one release as the reference implementation.
+
+Exit gate:
+
+- The only user-visible difference after update is the new UI.
+
+## Proposed Directory Structure
+
+```text
+apps/panel/
+|-- components.json
+|-- index.html
+|-- package.json
+|-- tsconfig.json
+|-- vite.config.ts
+`-- src/
+    |-- main.tsx
+    |-- routeTree.gen.ts
+    |-- router.tsx
+    |-- styles/
+    |   `-- app.css
+    |-- routes/
+    |   |-- __root.tsx
+    |   |-- index.tsx
+    |   |-- login.tsx
+    |   |-- setup.tsx
+    |   `-- server/
+    |       `-- $serverId/
+    |           |-- route.tsx
+    |           |-- overview.tsx
+    |           |-- console.tsx
+    |           |-- players.tsx
+    |           |-- mods.tsx
+    |           |-- files.tsx
+    |           |-- backups.tsx
+    |           |-- playit.tsx
+    |           |-- properties.tsx
+    |           `-- settings.tsx
+    |-- api/
+    |   |-- client.ts
+    |   |-- auth.ts
+    |   |-- backups.ts
+    |   |-- modrinth.ts
+    |   |-- players.ts
+    |   |-- playit.ts
+    |   |-- servers.ts
+    |   `-- schemas.ts
+    |-- queries/
+    |   |-- auth.ts
+    |   |-- backups.ts
+    |   |-- files.ts
+    |   |-- java.ts
+    |   |-- modrinth.ts
+    |   |-- players.ts
+    |   |-- playit.ts
+    |   |-- servers.ts
+    |   `-- update.ts
+    |-- forms/
+    |   |-- backup-config-form.tsx
+    |   |-- change-password-form.tsx
+    |   |-- create-server-form.tsx
+    |   |-- login-form.tsx
+    |   |-- quick-backup-form.tsx
+    |   |-- server-properties-form.tsx
+    |   `-- setup-form.tsx
+    |-- components/
+    |   |-- app/
+    |   |-- server/
+    |   |-- modrinth/
+    |   |-- backups/
+    |   |-- players/
+    |   `-- ui/
+    |-- stores/
+    |   |-- app-store.ts
+    |   |-- backups-ui-store.ts
+    |   |-- file-editor-store.ts
+    |   |-- hotkeys-store.ts
+    |   |-- mods-ui-store.ts
+    |   `-- server-ui-store.ts
+    |-- test/
+    |   |-- fixtures/
+    |   |-- msw/
+    |   `-- render-panel.tsx
+    |-- hooks/
+    `-- lib/
+```
+
+The route shape intentionally uses folder routing for each `$serverId` route. That keeps server-scoped data, breadcrumbs, and route-level code splitting natural.
+
+## Routes
+
+The panel should preserve current URLs where possible:
+
+| Current Vue route | New panel route |
+| --- | --- |
+| `/login` | `/login` |
+| `/setup` | `/setup` |
+| `/` | `/` |
+| `/server/:id/overview` | `/server/$serverId/overview` |
+| `/server/:id/console` | `/server/$serverId/console` |
+| `/server/:id/players` | `/server/$serverId/players` |
+| `/server/:id/mods` | `/server/$serverId/mods` |
+| `/server/:id/files` | `/server/$serverId/files` |
+| `/server/:id/backups` | `/server/$serverId/backups` |
+| `/server/:id/playit` | `/server/$serverId/playit` |
+| `/server/:id/properties` | `/server/$serverId/properties` |
+| `/server/:id/settings` | `/server/$serverId/settings` |
+
+Use the parent `/server/$serverId/route.tsx` for:
+
+- loading the current server shell data
+- owning server-scoped layout
+- rendering sidebar/topbar context
+- providing route context for breadcrumbs
+- hiding server-only routes when the selected loader does not support them
+
+Use child routes for page-level queries and code splitting.
+
+## Data Model
+
+Move Pinia store behavior into a combination of TanStack Query, TanStack Store, TanStack Form, and route search params.
+
+The interface between route code and data should be small:
+
+```text
+api/*       typed endpoint adapters and Zod parsing
+queries/*   query options, mutation hooks, invalidation rules
+stores/*    client-only UI state, never backend mirrors
+forms/*     form schemas and reusable field wiring
+routes/*    composition of the above for the visible page
+```
+
+Recommended query keys:
+
+```ts
+['auth', 'status']
+['session', 'servers']
+['session', 'server', serverId]
+['session', 'server', serverId, 'logs']
+['session', 'server', serverId, 'mods']
+['session', 'server', serverId, 'files', path]
+['session', 'server', serverId, 'file-content', path]
+['session', 'server', serverId, 'players', 'state']
+['session', 'server', serverId, 'players', 'online']
+['session', 'server', serverId, 'backup-configs']
+['session', 'server', serverId, 'snapshots']
+['session', 'server', serverId, 'backup-summary']
+['session', 'server', serverId, 'modpack-progress']
+['session', 'playit', 'status']
+['session', 'system', 'update-status']
+['session', 'java', 'status']
+['session', 'java', 'install-progress', taskId]
+```
+
+Use mutations for actions:
+
+- login, logout, setup, change password
+- create server, delete server
+- install server
+- start, stop, restart
+- update server settings
+- set autostart
+- send console command
+- install/remove mods
+- install modpacks
+- browse/save files
+- create/update/delete backup configs
+- quick backup
+- restore snapshot
+- import world
+- player whitelist/op/ban/kick actions
+- playit start/stop/reset
+- trigger Fabricator update
+
+Mutations should invalidate the smallest useful query set. For example, starting a server invalidates `['server', serverId]` and may leave mods/backups untouched.
+
+Highest-priority Zod schemas:
+
+- server list and server detail
+- server install progress
+- Java status and Java install progress
+- Modrinth search/detail/install errors
+- backup config, snapshot, summary, and job progress
+- player state
+- playit status
+- update status
+
+## Polling
+
+Use TanStack Query polling instead of hand-managed intervals.
+
+Suggested intervals:
+
+| Data | Interval |
+| --- | --- |
+| Current server status | 2500 ms while viewing a server |
+| Logs | 4000 ms on overview and console |
+| Modpack install progress | 1500 ms while active |
+| Java install progress | 1500 ms while active |
+| Backup/import job progress | 1500 ms while active |
+| Update status | 15 minutes when idle |
+| Update status during active update | 4000 ms |
+
+Avoid global polling for pages that are not visible. Route-level code splitting and query enablement should keep the app light.
+
+## Forms
+
+All forms in the panel should use TanStack Form with Zod validation.
+
+Start with shared schemas in `src/api/schemas.ts` or `src/forms/schemas.ts`, then wire those schemas into form validators.
+
+Initial forms:
+
+- login
+- first-run setup
+- create server
+- install server
+- server properties
+- general server settings
+- change password
+- quick backup
+- backup configuration
+- restore options
+- world import
+- Modrinth search filters
+- modpack import
+- player add/ban/kick forms
+- Java install
+
+The server properties page should not be one giant uncontrolled page. Keep one form, but split the UI into sections:
+
+- Identity
+- Gameplay
+- Players
+- World
+- Resource packs
+- Network
+- Performance
+- Advanced
+
+Use shadcn `Field`, `FieldGroup`, `FieldSet`, `Input`, `InputGroup`, `Select`, `Switch`, `Textarea`, `Slider`, and `ToggleGroup` as the baseline.
+
+## App Chrome
+
+Build the core shell before feature pages:
+
+- left sidebar
+- server switcher
+- topbar
+- breadcrumbs
+- update status
+- account actions
+- command palette
+- global toast host
+- modal/dialog host if needed
+
+Breadcrumbs should be route-driven, but labels can come from query data:
+
+```text
+Servers / Survival SMP / Mods
+Servers / Creative / Files / config / server.properties
+```
+
+The server switcher should use a searchable dropdown or command-style selector. It should expose "create server" as a first-class action.
+
+## Hotkeys
+
+Use TanStack Hotkeys for global and route-scoped shortcuts.
+
+Initial hotkeys:
+
+| Hotkey | Action |
+| --- | --- |
+| `Mod+K` | Open command palette |
+| `/` | Focus current page search |
+| `g o` | Go to overview |
+| `g c` | Go to console |
+| `g p` | Go to players |
+| `g m` | Go to mods |
+| `g f` | Go to files |
+| `g b` | Go to backups |
+| `g s` | Go to settings |
+| `r` | Refresh visible route data |
+| `Mod+Enter` | Submit the primary safe form action |
+| `Escape` | Close dialog, menu, palette, or clear selection |
+
+Do not make destructive operations single-keystroke. Stop server, delete, restore, uninstall, and update actions must keep confirmation dialogs.
+
+## Visual System
+
+Use the website theme as the source:
+
+- dark neutral app background
+- orange primary
+- crisp borders
+- restrained elevation
+- Geist type
+- lucide icons
+- compact controls
+- semantic Tailwind tokens
+
+The panel should feel like an operational control surface, not a marketing page:
+
+- denser layout
+- predictable navigation
+- stable row heights
+- clear state badges
+- compact page headers
+- no oversized hero sections
+- minimal decorative backgrounds
+- cards only for real grouped information
+
+Loader icons should become a proper visual language:
+
+- Vanilla
+- Fabric
+- Quilt
+- Forge
+- NeoForge
+- modpacks
+- Java
+- playit
+- backups
+
+Use lucide where a generic system icon fits. Use custom assets only for loader/product identity.
+
+## Performance Rules
+
+The panel should stay fast by default:
+
+- SPA build with Vite.
+- Route-level code splitting.
+- Lazy-load heavy feature pages and modals.
+- Keep Modrinth browser and modpack browser out of the initial route bundle.
+- Keep file editor logic out of routes that do not need it.
+- Import lucide icons directly.
+- Avoid large chart/editor libraries unless the feature needs them.
+- Use TanStack Query cache instead of duplicated global stores.
+- Use query `enabled` flags so hidden routes do not fetch.
+- Use `staleTime` for data that does not need live polling.
+- Keep table virtualization as an option for large mods/files/player lists.
+- Track bundle size with Vite output and add bundle analysis before cutover.
+
+Initial performance targets:
+
+- initial dashboard JavaScript under 250 KB gzip where practical
+- server route shell interactive quickly on local hardware
+- heavy panels split into separate chunks
+- no polling from hidden routes
+- no marketing-site code in the installed panel
+
+## Migration Phases
+
+### Phase 0: Baseline
+
+- Record current Vue routes, screens, API modules, and modal flows.
+- Capture screenshots of every current page.
+- Capture current build size and load behavior.
+- List all docs and release scripts that mention `apps/frontend`.
+
+Status: partially complete. Route/API/release audits are complete; screenshots and current Vue build-size capture remain.
+
+### Phase 1: Scaffold `apps/panel`
+
+- [x] Create Vite React TypeScript app.
+- [x] Add Tailwind v4.
+- [x] Initialize shadcn config with Base UI and lucide.
+- [ ] Add all shadcn components through the CLI.
+- [x] Copy/adapt Fabricator theme tokens from `apps/website/src/styles/app.css`.
+- [x] Add TanStack Router, Query, Form, Hotkeys, Zod, and sonner.
+- [ ] Add TanStack Store.
+- [ ] Defer TanStack DB until the parity port proves a collection/live-query need.
+- [x] Configure dev proxy to Flask `/api`.
+- [x] Keep build output in `apps/panel/dist`.
+- [x] Verify production build.
+- [x] Verify TypeScript check.
+
+### Phase 2: API and Schemas
+
+- Port the current JavaScript API client to TypeScript.
+- Preserve relative API paths.
+- Keep the 401 handler behavior.
+- Add request/response schemas where they reduce risk.
+- Build query and mutation hooks around existing endpoints.
+- Do not change backend routes unless the current contract blocks the panel.
+
+### Phase 3: Shell and Auth
+
+- [x] Implement root provider setup.
+- [x] Implement auth status gate.
+- [x] Port `/login`.
+- [x] Port `/setup`.
+- [x] Build initial app sidebar, topbar, and toast host.
+- [ ] Build breadcrumbs.
+- [ ] Build server switcher.
+- [ ] Build command palette.
+- [ ] Add update status polling and update confirmation flow.
+
+### Phase 4: Core Server Flow
+
+- Port server list.
+- Port create server modal/form.
+- Port server overview.
+- Port install/start/stop/restart actions.
+- Add route-level loading, empty, and error states.
+- Verify the shell works without relying on Vue state.
+
+### Phase 5: High-Use Server Pages
+
+- Port console.
+- Port files.
+- Port mods.
+- Port Modrinth mod browser.
+- Port modpack browser/import.
+- Add loader badges and loader icons.
+
+### Phase 6: Admin Pages
+
+- Port players.
+- Port backups.
+- Port playit.
+- Port Java manager.
+- Port general server settings.
+- Port change password.
+
+### Phase 7: Server Properties
+
+- Rebuild the server properties editor as a TanStack Form.
+- Split properties into sections.
+- Add Zod validation for numeric ranges and conditional fields.
+- Preserve dirty-state behavior.
+- Disable editing while the server is running where the backend requires it.
+
+### Phase 8: Parity and Hardening
+
+- Compare every Vue route against the panel route.
+- Run backend tests.
+- Run Vue parity capture tests against fixture data before replacing each feature.
+- Run the same React route tests against the panel implementation.
+- Add focused panel tests for route guards, core forms, and mutation invalidation.
+- Run accessibility checks on dialogs, menus, selects, command palette, and forms.
+- Run bundle analysis.
+- Verify dev server proxy and production static serving.
+
+### Phase 9: Release Cutover
+
+- Build `apps/panel/dist`, then package it as `frontend/dist` for the first panel release.
+- Keep Flask serving `frontend/dist` during the first panel release to avoid changing runtime static paths and UI implementation at the same time.
+- Update Dockerfile to build `apps/panel`, while copying the result to runtime `frontend/dist`.
+- Update release CI to build `apps/panel`, while publishing/copying the artifact as `frontend-dist`.
+- Update Windows build tooling to build `apps/panel`, while bundling the result as `frontend/dist`.
+- Update local-source install/update comments and copy paths to read from `apps/panel/dist`.
+- Update contributor docs from `apps/frontend` to `apps/panel`.
+- Keep `apps/frontend` for one release as legacy reference if useful.
+- Remove or archive `apps/frontend` after the panel has shipped and settled.
+
+## Cutover Checklist
+
+Before `apps/panel` becomes the installed dashboard:
+
+- `/login` works.
+- `/setup` works.
+- `/` server list works.
+- create server works.
+- server install works.
+- overview works.
+- console logs and commands work.
+- players page works.
+- mods page works.
+- files page works.
+- backups page works.
+- playit page works.
+- properties page works.
+- settings/change password works.
+- update status and trigger work.
+- auth redirect behavior matches current frontend.
+- unknown `/api/*` still returns JSON 404.
+- unknown app routes still fall back to `index.html`.
+- Docker image serves the panel.
+- native install serves the panel.
+- Windows build bundles the panel.
+- `fabricator update` from the previous Vue release installs the panel without changing data/config paths.
+- In-app update status still reports current/latest/in-progress/error states correctly after cutover.
+- Packaged deep links refresh correctly from the installed Flask server, not just Vite dev.
+- docs no longer claim the shipped dashboard is Vue.
+
+## Parity Preservation Checklist
+
+Use this checklist while porting routes from `apps/frontend`.
+
+Shell and auth:
+
+- Preserve first-boot setup locking, configured-user setup redirects, login redirects, and auth-disabled behavior.
+- Keep the API client's global 401 handler, with `skipAuthRedirect` for login, setup, and password-change flows.
+- Keep the global create-server modal above route layouts so it works from `/`, the sidebar/server switcher, and server pages.
+- Stop old server-scoped polling and clear per-server local state when `serverId` changes.
+- Prefer persisted in-flight server states over runtime `stopped` when displaying status during install/start/stop transitions.
+
+Server list and creation:
+
+- Redirect from `/` to the first server overview when servers exist.
+- Show the empty state only when the server list is empty.
+- Preserve loader/version reload behavior, snapshot toggle, Java preflight, EULA requirement, async install progress, and modpack-on-create continuation flows.
+- Preserve modpack missing-files and uncertain-client/server-side continuation dialogs.
+
+Server pages:
+
+- Overview keeps runtime cards, stdout log preview, active modpack panel, playit tunnel card, and quick links.
+- Console preserves log timestamp merge behavior, level normalization, filters, auto-scroll, refresh, and running-only command submission.
+- Players preserves full state load, online-only polling while running, optimistic mutations with rollback, runtime whitelist behavior, inline reason entry, and IP-ban panel behavior.
+- Mods preserves local installed-mod search, bulk selection/delete, Modrinth compatibility/dependency dialogs, already-installed detection, and modpack replace warnings.
+- Files preserves path breadcrumbs, text-extension gating, dirty editor tracking, unsaved-change confirmation, and copy/open feedback.
+- Backups preserves config/snapshot/summary loading, active job polling, manage-config form, purge-retention banner, quick backup, restore mode choice, import upload progress, and snapshot delete confirmation.
+- playit preserves daemon-level global state, ref-counted polling, claim/running/error states, reset confirmation, and per-server tunnel matching by port.
+- Properties preserves one dirty-tracked form, basic/expert grouping, running-server edit guard, all `defaultSettings` mappings, conditional field disabling, and delete-server confirm.
+- Settings preserves autostart optimistic updates, Java install progress, managed-Java removal confirm, auth-only password change, and version fallback behavior.
+
+## Open Decisions
+
+- Whether a later cleanup release should rename the runtime static bundle from `frontend/dist` to `panel/dist`.
+- Whether to keep `apps/frontend` for one full release after panel cutover.
+- Which loader icons are custom assets versus lucide icons.
+- Whether TanStack DB should be introduced after parity for normalized server/player/mod/backup collections.
+- Whether server file editing needs a richer editor or should stay a fast textarea for v1.
+
+## Non-Goals
+
+- No backend API redesign as part of the panel migration.
+- No SSR requirement for the installed dashboard.
+- No marketing-site merge.
+- No release process rewrite beyond changing which static build is packaged.
+- No destructive hotkeys.

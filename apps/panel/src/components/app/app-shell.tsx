@@ -2,6 +2,7 @@ import { Outlet } from "@tanstack/react-router";
 
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { AppTopbar } from "@/components/app/app-topbar";
+import { CommandPalette } from "@/components/app/command-palette";
 
 export function AppShell() {
   return (
@@ -13,6 +14,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

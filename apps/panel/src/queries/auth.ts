@@ -34,3 +34,9 @@ export function useLogoutMutation() {
     onSettled: () => clearAuthenticatedSession(unauthenticatedStatus),
   });
 }
+
+export function useChangePasswordMutation() {
+  return useMutation({
+    mutationFn: ({ current, next }: { current: string; next: string }) => authApi.changePassword(current, next),
+  });
+}

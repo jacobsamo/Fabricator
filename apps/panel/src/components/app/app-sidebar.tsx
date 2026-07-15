@@ -1,19 +1,26 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   Archive,
   Boxes,
   FileText,
   Gauge,
   LayoutGrid,
+  Lock,
   Network,
+  Plus,
   Server,
   Settings,
   Terminal,
   Users,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { ServerSwitcher } from "@/components/server/server-switcher";
+import { UpdateStatus } from "@/components/app/update-status";
 import { cn } from "@/lib/utils";
+import { authStatusQuery, useLogoutMutation } from "@/queries/auth";
+import { serverQuery } from "@/queries/servers";
+import { isVanillaServer } from "@/lib/server-status";
 
 const navItems = [
   { to: "/server/$serverId/overview", label: "Overview", icon: LayoutGrid },
@@ -28,10 +35,18 @@ const navItems = [
 ] as const;
 
 export function AppSidebar() {
+  const navigate = useNavigate();
+  const logout = useLogoutMutation();
+  const auth = useQuery(authStatusQuery);
   const matches = useRouterState({ select: (state) => state.matches });
   const serverMatch = matches.find((match) => "serverId" in match.params);
   const serverParams = serverMatch?.params as { serverId?: unknown } | undefined;
   const serverId = typeof serverParams?.serverId === "string" ? serverParams.serverId : null;
+  const server = useQuery({
+    ...serverQuery(serverId || "__none__"),
+    enabled: Boolean(serverId),
+  });
+  const visibleNavItems = isVanillaServer(server.data) ? navItems.filter((item) => item.label !== "Mods") : navItems;
 
   return (
     <aside className="flex h-screen w-[216px] shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
@@ -46,14 +61,21 @@ export function AppSidebar() {
       </div>
 
       <div className="border-b border-border p-3">
-        <Link to="/" className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm transition hover:bg-accent">
-          <span className="truncate">All servers</span>
-          <Badge variant="muted">new</Badge>
-        </Link>
+        {serverId ? (
+          <ServerSwitcher serverId={serverId} currentServer={server.data} />
+        ) : (
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left text-sm transition hover:bg-accent"
+          >
+            <Plus className="size-3.5" />
+            <span className="truncate">No servers yet</span>
+          </button>
+        )}
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Server navigation">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           serverId ? (
             <Link
               key={item.label}
@@ -80,8 +102,29 @@ export function AppSidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-border p-3 text-xs text-muted-foreground">
-        Built from `apps/panel`.
+      <div className="flex flex-col gap-2 border-t border-border p-3">
+        <Link
+          to="/"
+          className="flex h-9 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+        >
+          <Server aria-hidden="true" />
+          <span className="truncate">All servers</span>
+        </Link>
+        {auth.data?.enabled ? (
+          <button
+            type="button"
+            className="flex h-9 items-center gap-2 rounded-md px-3 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+            disabled={logout.isPending}
+            onClick={async () => {
+              await logout.mutateAsync();
+              await navigate({ to: "/login", search: { redirect: undefined }, replace: true });
+            }}
+          >
+            <Lock aria-hidden="true" />
+            <span className="truncate">Lock</span>
+          </button>
+        ) : null}
+        <UpdateStatus />
       </div>
     </aside>
   );
