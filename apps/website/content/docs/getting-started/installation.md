@@ -30,6 +30,14 @@ The script requires root privileges. If you run it as a non-root user, it uses `
 
 By default this installs the latest published release. After install, open the printed URL, then complete the first-boot password setup.
 
+The website publishes the release management scripts at stable URLs:
+
+| Script | URL | Purpose |
+| --- | --- | --- |
+| `install.sh` | `https://fabricator.site/install.sh` | Fresh install or install-like update. |
+| `update.sh` | `https://fabricator.site/update.sh` | Native update wrapper that calls the installer in update mode. |
+| `uninstall.sh` | `https://fabricator.site/uninstall.sh` | Native uninstaller with prompts for data/config removal. |
+
 :::tip[Inspect before running]
 If you prefer to inspect the installer first, download it and run it explicitly:
 
@@ -69,6 +77,12 @@ Native install:
 
 ```bash
 curl -fsSL https://fabricator.site/install.sh | bash -s -- --update
+```
+
+You can also fetch the public update wrapper directly:
+
+```bash
+curl -fsSL https://fabricator.site/update.sh | bash
 ```
 
 During update, Fabricator backs up important state under `/var/lib/fabricator/update-backups/<timestamp>/`, including `servers.json` and `fabricator.env` when present.
@@ -142,3 +156,11 @@ sudo fabricator uninstall
 ```
 
 The command asks you to type `yes` and then removes the service, app files, data directory, config directory, service user, and systemd unit. It is destructive.
+
+If the local CLI is unavailable, you can fetch the public uninstaller:
+
+```bash
+curl -fsSL https://fabricator.site/uninstall.sh | bash
+```
+
+The uninstaller prompts before removing runtime data, config, or the service user.

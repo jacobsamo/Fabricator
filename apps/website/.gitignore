@@ -17,3 +17,8 @@ node_modules
 
 .source
 .wrangler
+
+# Generated from ../../tools by scripts/sync-public-scripts.mjs
+/public/install.sh
+/public/update.sh
+/public/uninstall.sh

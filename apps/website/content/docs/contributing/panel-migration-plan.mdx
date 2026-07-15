@@ -1,0 +1,722 @@
+---
+title: Panel Migration Plan
+description: Plan for replacing the shipped Vue dashboard with a new React, TanStack, shadcn, Base UI, and Tailwind panel.
+---
+
+This is the migration plan for introducing `apps/panel` as Fabricator's new installed dashboard while keeping the current Vue dashboard in `apps/frontend` during the transition.
+
+The goal is to ship a faster, more maintainable control panel without changing the backend API contract or making release installs more complex.
+
+## Execution Status
+
+Last updated: 2026-07-15.
+
+Completed:
+
+- Created `apps/panel` as a Vite React TypeScript app.
+- Added the requested panel stack to `apps/panel/package.json`: TanStack Router, TanStack Query, TanStack Form, TanStack Hotkeys, Zod, Tailwind v4, shadcn, Base UI, lucide, and sonner.
+- Added `apps/panel/components.json` with `base-nova`, Base UI, lucide, and the same alias shape as the website.
+- Added the initial route tree and folder structure for `/`, `/login`, `/setup`, and `/server/$serverId/*`.
+- Added initial API client, auth/server API modules, Zod schemas, query options, and auth form schemas.
+- Added initial local shadcn-style UI components for button, card, input, and badge.
+- Added an initial app shell with sidebar, topbar, route placeholders, and Fabricator theme tokens adapted from the website.
+- Ported the Vue auth route-guard contract into TanStack Router: setup lock, login redirect, app-route protection, auth-disabled passthrough, status-call failure fallback, safe same-origin redirects, global 401 handling, cached install-status routing, and client-side post-auth redirects.
+- Added the auth cache boundary for logout/session expiry: auth status is kept under `["auth", "status"]`, protected app data is kept under `["session", ...]`, and logout/401 clears protected session data before routing to login.
+- Fixed auth status parsing to match the backend's `needs_setup` response.
+- Updated login/setup behavior to keep wrong-password and setup errors local instead of triggering global auth redirects.
+- Updated the server list route to redirect to the first server overview when servers exist, matching the Vue route behavior.
+- Removed the scaffold-only fake `/server/current` navigation and disabled server nav when no server is selected.
+- Switched panel theme tokens and font toward the current Vue dashboard system: DM Sans, `#0f0f0f` background, `#141414` panels, `#1e1e1e` borders, `#f97316` primary, and current scrollbar/input/button treatment.
+- Added a panel-local `lint` script with `oxlint`.
+- Verified `bun run build` succeeds for `apps/panel`.
+- Verified `bun run types:check` succeeds for `apps/panel`.
+- Verified `bun run lint` succeeds for `apps/panel`.
+
+In progress:
+
+- Full shadcn component installation and tuning. The panel currently has starter local components, not the full shadcn component set.
+- Auth UI parity beyond login/setup shell polish, such as eventual password-change modal behavior.
+- Route parity. Server pages are placeholders ready for feature ports.
+- Release cutover. Production still serves `apps/frontend/dist`.
+
+Current build snapshot:
+
+```text
+apps/panel production build: passes
+apps/panel type check: passes
+apps/panel lint: passes
+current JS bundle: 451.97 kB, 137.04 kB gzip
+current CSS bundle: 17.24 kB, 4.40 kB gzip
+```
+
+## Direction
+
+Create a new app at `apps/panel`.
+
+Keep `apps/frontend` in place until the panel reaches feature parity. The Vue app remains useful as the reference implementation while each screen is ported.
+
+When the panel is ready, change production serving and release packaging from `apps/frontend/dist` to `apps/panel/dist`. Until then, the backend should continue serving the current frontend.
+
+## Stack
+
+Use this stack for `apps/panel`:
+
+- Vite
+- React
+- TypeScript
+- TanStack Router
+- TanStack Query
+- TanStack Form
+- TanStack Hotkeys
+- Zod
+- Tailwind CSS v4
+- shadcn/ui with Base UI primitives
+- lucide-react
+- sonner for toast notifications
+
+The website already uses the visual direction we want: Base UI, shadcn, Tailwind v4, lucide icons, Geist, and the orange/neutral Fabricator theme. The panel should reuse that theme vocabulary, then tune it for a dense application UI instead of a marketing page.
+
+## shadcn Strategy
+
+Install shadcn in `apps/panel` and add the full component set early.
+
+The important point is that shadcn components become local source code. We should use that as the starting system, then adjust the local components to match Fabricator's product feel.
+
+Use shadcn for:
+
+- buttons
+- inputs
+- input groups
+- selects
+- dropdown menus
+- breadcrumbs
+- dialogs
+- sheets
+- tabs
+- accordions
+- command palette
+- sidebar
+- tables
+- cards
+- badges
+- tooltips
+- popovers
+- switches
+- sliders
+- skeletons
+- progress
+- empty states
+- alerts
+
+After install, tune the local shadcn files rather than wrapping everything in another design system. For example:
+
+- `button.tsx` can carry Fabricator-specific size, radius, loading, and icon defaults.
+- `accordion.tsx` can differ from the marketing site if the panel needs denser disclosure rows.
+- `select.tsx` and `dropdown-menu.tsx` should be tuned for keyboard-heavy operations.
+- `sidebar.tsx` should become the foundation for Fabricator's app chrome.
+- `breadcrumb.tsx` should use TanStack route matches and server names.
+
+Keep changes token-driven. Prefer semantic classes such as `bg-background`, `text-muted-foreground`, `border-border`, and `text-primary` over raw color utilities.
+
+## App Boundary
+
+`apps/panel` is the product dashboard. `apps/website` remains the public marketing and docs site.
+
+Do not fold the installed panel into the website app. The panel should stay a standalone Vite SPA served by Flask, because that keeps native installs, Docker images, Windows builds, and self-update simple.
+
+The production contract should eventually be:
+
+```text
+apps/panel/dist -> bundled as frontend/dist or served directly as panel/dist
+Flask fallback route -> index.html
+/api/* -> JSON API only
+```
+
+During migration, keep the current contract:
+
+```text
+apps/frontend/dist -> served by Flask
+apps/panel -> development app only
+```
+
+## Update Safety Contract
+
+The in-app update path must keep working exactly as it does today. A user should be able to click update, let `tools/update.sh` run the release installer, and come back to the same backend, data, settings, auth mode, server records, playit state, Java installs, backups, and update service behavior. The only intended difference at panel cutover is the improved UI served from the same backend.
+
+For the first panel release, keep the installed runtime layout compatible:
+
+```text
+release CI builds apps/panel/dist
+release artifact is still named frontend-dist
+Linux tarball still contains frontend/dist
+Docker runtime still copies the UI to ./frontend/dist
+PyInstaller still bundles frontend/dist
+Flask still serves frontend/dist
+```
+
+This avoids changing both the UI implementation and the runtime static path in one release. A later cleanup release can rename the runtime bundle from `frontend/dist` to `panel/dist` if it is still worth the churn.
+
+Before changing release packaging, test these update cases:
+
+- Existing native install updates from a Vue-dashboard release to a panel-dashboard release.
+- Existing Docker install pulls the new image and keeps the `/data` volume intact.
+- Existing Windows build bundles the panel as `frontend/dist` and still serves deep links.
+- Auth-enabled install remains logged-in/session-compatible where expected; logged-out users land on `/login`.
+- First-boot install with no password still lands on `/setup`.
+- Auth-disabled install still bypasses the guard.
+- Existing deep links such as `/server/<id>/overview` still work after update and browser refresh.
+- Unknown `/api/*` paths still return JSON 404 instead of the SPA HTML.
+- Unknown non-API app routes still fall back to `index.html`.
+- Failed update attempt leaves the previous installed app intact, or at minimum keeps `fabricator.service` restartable with clear update logs.
+
+Release cutover should be blocked unless the new panel passes the same smoke flows against a packaged artifact, not only against the Vite dev server.
+
+## Testing Without Local Minecraft Servers
+
+Do not require contributors or release verification to create real Minecraft servers on their host machine. Most panel work can and should be tested with deterministic fixtures.
+
+Use four layers:
+
+1. UI fixture mode in `apps/panel`.
+   Mock `/api/*` responses with a browser-level mock layer such as MSW, backed by checked-in auth, setup, server, player, mod, file, backup, playit, and update fixtures. This is the fastest loop for styling, navigation, forms, empty states, loading states, and error states.
+
+2. Backend fixture mode.
+   Run the Flask backend against a temporary data directory and fake server records, with background schedulers and real process starts disabled. This verifies API shape, auth cookies, SPA fallback, and route guards without creating or launching Minecraft.
+
+3. Packaged Docker smoke tests.
+   Build the same artifact shape users receive, copy `apps/panel/dist` into runtime `frontend/dist`, mount a disposable `/data` volume, seed fixture data, and run Playwright against the Flask-served panel. This verifies update safety, refresh/deep-link behavior, static serving, and auth/session behavior in an install-like environment.
+
+4. Narrow real-server tests.
+   Keep true Minecraft create/start/stop tests as opt-in release or nightly checks in an isolated container or VM. They should not be part of the normal panel UI development loop.
+
+Required panel smoke coverage:
+
+- `/` decides once between app, setup, and login from `/api/auth/status`.
+- Unauthenticated app routes redirect straight to `/login?redirect=...`.
+- First-boot installs redirect straight to `/setup`, not login then setup.
+- Auth-disabled installs enter the app without login.
+- Login and setup mutate auth state locally and navigate client-side without a full page reload.
+- Server deep links refresh correctly from the packaged Flask server.
+- Empty server list, populated server list, stopped server, running server, installing server, and API error states all render from fixtures.
+- Update status and update-trigger UI render from fixtures without modifying the host machine.
+
+## Query Cache and Auth Boundaries
+
+Use predictable query-key roots so auth, logout, and future team auth stay easy to reason about:
+
+```text
+["auth", "status"]       install/auth status used by route guards
+["session", ...]         protected data for the active authenticated context
+```
+
+Rules:
+
+- Login and setup set `["auth", "status"]` to authenticated immediately after a successful mutation.
+- Logout clears all `["session", ...]` queries, clears mutation state, writes unauthenticated auth status, then navigates to `/login`.
+- Global `401` handling uses the same session-clearing path as logout before redirecting.
+- Route data must use the `queryKeys` helpers, not ad hoc string arrays.
+- Future team/org auth should extend the session root instead of changing the logout mechanism, for example `["session", teamId, "servers"]` or `["session", orgId, "servers"]`.
+- Switching team/org/account should clear the previous scoped `["session", ...]` data before loading the next scope, while keeping `["auth", "status"]` intact.
+- Do not store protected server data under `["auth", ...]`; auth keys are only for authentication/install status.
+
+## Proposed Directory Structure
+
+```text
+apps/panel/
+|-- components.json
+|-- index.html
+|-- package.json
+|-- tsconfig.json
+|-- vite.config.ts
+`-- src/
+    |-- main.tsx
+    |-- routeTree.gen.ts
+    |-- router.tsx
+    |-- styles/
+    |   `-- app.css
+    |-- routes/
+    |   |-- __root.tsx
+    |   |-- index.tsx
+    |   |-- login.tsx
+    |   |-- setup.tsx
+    |   `-- server/
+    |       `-- $serverId/
+    |           |-- route.tsx
+    |           |-- overview.tsx
+    |           |-- console.tsx
+    |           |-- players.tsx
+    |           |-- mods.tsx
+    |           |-- files.tsx
+    |           |-- backups.tsx
+    |           |-- playit.tsx
+    |           |-- properties.tsx
+    |           `-- settings.tsx
+    |-- api/
+    |   |-- client.ts
+    |   |-- auth.ts
+    |   |-- backups.ts
+    |   |-- modrinth.ts
+    |   |-- players.ts
+    |   |-- playit.ts
+    |   |-- servers.ts
+    |   `-- schemas.ts
+    |-- queries/
+    |   |-- auth.ts
+    |   |-- backups.ts
+    |   |-- files.ts
+    |   |-- java.ts
+    |   |-- modrinth.ts
+    |   |-- players.ts
+    |   |-- playit.ts
+    |   |-- servers.ts
+    |   `-- update.ts
+    |-- forms/
+    |   |-- backup-config-form.tsx
+    |   |-- change-password-form.tsx
+    |   |-- create-server-form.tsx
+    |   |-- login-form.tsx
+    |   |-- quick-backup-form.tsx
+    |   |-- server-properties-form.tsx
+    |   `-- setup-form.tsx
+    |-- components/
+    |   |-- app/
+    |   |-- server/
+    |   |-- modrinth/
+    |   |-- backups/
+    |   |-- players/
+    |   `-- ui/
+    |-- hooks/
+    `-- lib/
+```
+
+The route shape intentionally uses folder routing for each `$serverId` route. That keeps server-scoped data, breadcrumbs, and route-level code splitting natural.
+
+## Routes
+
+The panel should preserve current URLs where possible:
+
+| Current Vue route | New panel route |
+| --- | --- |
+| `/login` | `/login` |
+| `/setup` | `/setup` |
+| `/` | `/` |
+| `/server/:id/overview` | `/server/$serverId/overview` |
+| `/server/:id/console` | `/server/$serverId/console` |
+| `/server/:id/players` | `/server/$serverId/players` |
+| `/server/:id/mods` | `/server/$serverId/mods` |
+| `/server/:id/files` | `/server/$serverId/files` |
+| `/server/:id/backups` | `/server/$serverId/backups` |
+| `/server/:id/playit` | `/server/$serverId/playit` |
+| `/server/:id/properties` | `/server/$serverId/properties` |
+| `/server/:id/settings` | `/server/$serverId/settings` |
+
+Use the parent `/server/$serverId/route.tsx` for:
+
+- loading the current server shell data
+- owning server-scoped layout
+- rendering sidebar/topbar context
+- providing route context for breadcrumbs
+- hiding server-only routes when the selected loader does not support them
+
+Use child routes for page-level queries and code splitting.
+
+## Data Model
+
+Move Pinia store behavior into TanStack Query hooks and narrow local component state.
+
+Recommended query keys:
+
+```ts
+['auth', 'status']
+['servers']
+['server', serverId]
+['server', serverId, 'logs']
+['server', serverId, 'mods']
+['server', serverId, 'files', path]
+['server', serverId, 'file-content', path]
+['server', serverId, 'players', 'state']
+['server', serverId, 'players', 'online']
+['server', serverId, 'backup-configs']
+['server', serverId, 'snapshots']
+['server', serverId, 'backup-summary']
+['server', serverId, 'modpack-progress']
+['playit', 'status']
+['system', 'update-status']
+['java', 'status']
+['java', 'installed']
+```
+
+Use mutations for actions:
+
+- login, logout, setup, change password
+- create server, delete server
+- install server
+- start, stop, restart
+- update server settings
+- set autostart
+- send console command
+- install/remove mods
+- install modpacks
+- browse/save files
+- create/update/delete backup configs
+- quick backup
+- restore snapshot
+- import world
+- player whitelist/op/ban/kick actions
+- playit start/stop/reset
+- trigger Fabricator update
+
+Mutations should invalidate the smallest useful query set. For example, starting a server invalidates `['server', serverId]` and may leave mods/backups untouched.
+
+Highest-priority Zod schemas:
+
+- server list and server detail
+- server install progress
+- Java status and Java install progress
+- Modrinth search/detail/install errors
+- backup config, snapshot, summary, and job progress
+- player state
+- playit status
+- update status
+
+## Polling
+
+Use TanStack Query polling instead of hand-managed intervals.
+
+Suggested intervals:
+
+| Data | Interval |
+| --- | --- |
+| Current server status | 2500 ms while viewing a server |
+| Logs | 4000 ms on overview and console |
+| Modpack install progress | 1500 ms while active |
+| Java install progress | 1500 ms while active |
+| Backup/import job progress | 1500 ms while active |
+| Update status | 15 minutes when idle |
+| Update status during active update | 4000 ms |
+
+Avoid global polling for pages that are not visible. Route-level code splitting and query enablement should keep the app light.
+
+## Forms
+
+All forms in the panel should use TanStack Form with Zod validation.
+
+Start with shared schemas in `src/api/schemas.ts` or `src/forms/schemas.ts`, then wire those schemas into form validators.
+
+Initial forms:
+
+- login
+- first-run setup
+- create server
+- install server
+- server properties
+- general server settings
+- change password
+- quick backup
+- backup configuration
+- restore options
+- world import
+- Modrinth search filters
+- modpack import
+- player add/ban/kick forms
+- Java install
+
+The server properties page should not be one giant uncontrolled page. Keep one form, but split the UI into sections:
+
+- Identity
+- Gameplay
+- Players
+- World
+- Resource packs
+- Network
+- Performance
+- Advanced
+
+Use shadcn `Field`, `FieldGroup`, `FieldSet`, `Input`, `InputGroup`, `Select`, `Switch`, `Textarea`, `Slider`, and `ToggleGroup` as the baseline.
+
+## App Chrome
+
+Build the core shell before feature pages:
+
+- left sidebar
+- server switcher
+- topbar
+- breadcrumbs
+- update status
+- account actions
+- command palette
+- global toast host
+- modal/dialog host if needed
+
+Breadcrumbs should be route-driven, but labels can come from query data:
+
+```text
+Servers / Survival SMP / Mods
+Servers / Creative / Files / config / server.properties
+```
+
+The server switcher should use a searchable dropdown or command-style selector. It should expose "create server" as a first-class action.
+
+## Hotkeys
+
+Use TanStack Hotkeys for global and route-scoped shortcuts.
+
+Initial hotkeys:
+
+| Hotkey | Action |
+| --- | --- |
+| `Mod+K` | Open command palette |
+| `/` | Focus current page search |
+| `g o` | Go to overview |
+| `g c` | Go to console |
+| `g p` | Go to players |
+| `g m` | Go to mods |
+| `g f` | Go to files |
+| `g b` | Go to backups |
+| `g s` | Go to settings |
+| `r` | Refresh visible route data |
+| `Mod+Enter` | Submit the primary safe form action |
+| `Escape` | Close dialog, menu, palette, or clear selection |
+
+Do not make destructive operations single-keystroke. Stop server, delete, restore, uninstall, and update actions must keep confirmation dialogs.
+
+## Visual System
+
+Use the website theme as the source:
+
+- dark neutral app background
+- orange primary
+- crisp borders
+- restrained elevation
+- Geist type
+- lucide icons
+- compact controls
+- semantic Tailwind tokens
+
+The panel should feel like an operational control surface, not a marketing page:
+
+- denser layout
+- predictable navigation
+- stable row heights
+- clear state badges
+- compact page headers
+- no oversized hero sections
+- minimal decorative backgrounds
+- cards only for real grouped information
+
+Loader icons should become a proper visual language:
+
+- Vanilla
+- Fabric
+- Quilt
+- Forge
+- NeoForge
+- modpacks
+- Java
+- playit
+- backups
+
+Use lucide where a generic system icon fits. Use custom assets only for loader/product identity.
+
+## Performance Rules
+
+The panel should stay fast by default:
+
+- SPA build with Vite.
+- Route-level code splitting.
+- Lazy-load heavy feature pages and modals.
+- Keep Modrinth browser and modpack browser out of the initial route bundle.
+- Keep file editor logic out of routes that do not need it.
+- Import lucide icons directly.
+- Avoid large chart/editor libraries unless the feature needs them.
+- Use TanStack Query cache instead of duplicated global stores.
+- Use query `enabled` flags so hidden routes do not fetch.
+- Use `staleTime` for data that does not need live polling.
+- Keep table virtualization as an option for large mods/files/player lists.
+- Track bundle size with Vite output and add bundle analysis before cutover.
+
+Initial performance targets:
+
+- initial dashboard JavaScript under 250 KB gzip where practical
+- server route shell interactive quickly on local hardware
+- heavy panels split into separate chunks
+- no polling from hidden routes
+- no marketing-site code in the installed panel
+
+## Migration Phases
+
+### Phase 0: Baseline
+
+- Record current Vue routes, screens, API modules, and modal flows.
+- Capture screenshots of every current page.
+- Capture current build size and load behavior.
+- List all docs and release scripts that mention `apps/frontend`.
+
+Status: partially complete. Route/API/release audits are complete; screenshots and current Vue build-size capture remain.
+
+### Phase 1: Scaffold `apps/panel`
+
+- [x] Create Vite React TypeScript app.
+- [x] Add Tailwind v4.
+- [x] Initialize shadcn config with Base UI and lucide.
+- [ ] Add all shadcn components through the CLI.
+- [x] Copy/adapt Fabricator theme tokens from `apps/website/src/styles/app.css`.
+- [x] Add TanStack Router, Query, Form, Hotkeys, Zod, and sonner.
+- [x] Configure dev proxy to Flask `/api`.
+- [x] Keep build output in `apps/panel/dist`.
+- [x] Verify production build.
+- [x] Verify TypeScript check.
+
+### Phase 2: API and Schemas
+
+- Port the current JavaScript API client to TypeScript.
+- Preserve relative API paths.
+- Keep the 401 handler behavior.
+- Add request/response schemas where they reduce risk.
+- Build query and mutation hooks around existing endpoints.
+- Do not change backend routes unless the current contract blocks the panel.
+
+### Phase 3: Shell and Auth
+
+- [x] Implement root provider setup.
+- [x] Implement auth status gate.
+- [x] Port `/login`.
+- [x] Port `/setup`.
+- [x] Build initial app sidebar, topbar, and toast host.
+- [ ] Build breadcrumbs.
+- [ ] Build server switcher.
+- [ ] Build command palette.
+- [ ] Add update status polling and update confirmation flow.
+
+### Phase 4: Core Server Flow
+
+- Port server list.
+- Port create server modal/form.
+- Port server overview.
+- Port install/start/stop/restart actions.
+- Add route-level loading, empty, and error states.
+- Verify the shell works without relying on Vue state.
+
+### Phase 5: High-Use Server Pages
+
+- Port console.
+- Port files.
+- Port mods.
+- Port Modrinth mod browser.
+- Port modpack browser/import.
+- Add loader badges and loader icons.
+
+### Phase 6: Admin Pages
+
+- Port players.
+- Port backups.
+- Port playit.
+- Port Java manager.
+- Port general server settings.
+- Port change password.
+
+### Phase 7: Server Properties
+
+- Rebuild the server properties editor as a TanStack Form.
+- Split properties into sections.
+- Add Zod validation for numeric ranges and conditional fields.
+- Preserve dirty-state behavior.
+- Disable editing while the server is running where the backend requires it.
+
+### Phase 8: Parity and Hardening
+
+- Compare every Vue route against the panel route.
+- Run backend tests.
+- Add focused panel tests for route guards, core forms, and mutation invalidation.
+- Run accessibility checks on dialogs, menus, selects, command palette, and forms.
+- Run bundle analysis.
+- Verify dev server proxy and production static serving.
+
+### Phase 9: Release Cutover
+
+- Build `apps/panel/dist`, then package it as `frontend/dist` for the first panel release.
+- Keep Flask serving `frontend/dist` during the first panel release to avoid changing runtime static paths and UI implementation at the same time.
+- Update Dockerfile to build `apps/panel`, while copying the result to runtime `frontend/dist`.
+- Update release CI to build `apps/panel`, while publishing/copying the artifact as `frontend-dist`.
+- Update Windows build tooling to build `apps/panel`, while bundling the result as `frontend/dist`.
+- Update local-source install/update comments and copy paths to read from `apps/panel/dist`.
+- Update contributor docs from `apps/frontend` to `apps/panel`.
+- Keep `apps/frontend` for one release as legacy reference if useful.
+- Remove or archive `apps/frontend` after the panel has shipped and settled.
+
+## Cutover Checklist
+
+Before `apps/panel` becomes the installed dashboard:
+
+- `/login` works.
+- `/setup` works.
+- `/` server list works.
+- create server works.
+- server install works.
+- overview works.
+- console logs and commands work.
+- players page works.
+- mods page works.
+- files page works.
+- backups page works.
+- playit page works.
+- properties page works.
+- settings/change password works.
+- update status and trigger work.
+- auth redirect behavior matches current frontend.
+- unknown `/api/*` still returns JSON 404.
+- unknown app routes still fall back to `index.html`.
+- Docker image serves the panel.
+- native install serves the panel.
+- Windows build bundles the panel.
+- `fabricator update` from the previous Vue release installs the panel without changing data/config paths.
+- In-app update status still reports current/latest/in-progress/error states correctly after cutover.
+- Packaged deep links refresh correctly from the installed Flask server, not just Vite dev.
+- docs no longer claim the shipped dashboard is Vue.
+
+## Parity Preservation Checklist
+
+Use this checklist while porting routes from `apps/frontend`.
+
+Shell and auth:
+
+- Preserve first-boot setup locking, configured-user setup redirects, login redirects, and auth-disabled behavior.
+- Keep the API client's global 401 handler, with `skipAuthRedirect` for login, setup, and password-change flows.
+- Keep the global create-server modal above route layouts so it works from `/`, the sidebar/server switcher, and server pages.
+- Stop old server-scoped polling and clear per-server local state when `serverId` changes.
+- Prefer persisted in-flight server states over runtime `stopped` when displaying status during install/start/stop transitions.
+
+Server list and creation:
+
+- Redirect from `/` to the first server overview when servers exist.
+- Show the empty state only when the server list is empty.
+- Preserve loader/version reload behavior, snapshot toggle, Java preflight, EULA requirement, async install progress, and modpack-on-create continuation flows.
+- Preserve modpack missing-files and uncertain-client/server-side continuation dialogs.
+
+Server pages:
+
+- Overview keeps runtime cards, stdout log preview, active modpack panel, playit tunnel card, and quick links.
+- Console preserves log timestamp merge behavior, level normalization, filters, auto-scroll, refresh, and running-only command submission.
+- Players preserves full state load, online-only polling while running, optimistic mutations with rollback, runtime whitelist behavior, inline reason entry, and IP-ban panel behavior.
+- Mods preserves local installed-mod search, bulk selection/delete, Modrinth compatibility/dependency dialogs, already-installed detection, and modpack replace warnings.
+- Files preserves path breadcrumbs, text-extension gating, dirty editor tracking, unsaved-change confirmation, and copy/open feedback.
+- Backups preserves config/snapshot/summary loading, active job polling, manage-config form, purge-retention banner, quick backup, restore mode choice, import upload progress, and snapshot delete confirmation.
+- playit preserves daemon-level global state, ref-counted polling, claim/running/error states, reset confirmation, and per-server tunnel matching by port.
+- Properties preserves one dirty-tracked form, basic/expert grouping, running-server edit guard, all `defaultSettings` mappings, conditional field disabling, and delete-server confirm.
+- Settings preserves autostart optimistic updates, Java install progress, managed-Java removal confirm, auth-only password change, and version fallback behavior.
+
+## Open Decisions
+
+- Whether a later cleanup release should rename the runtime static bundle from `frontend/dist` to `panel/dist`.
+- Whether to keep `apps/frontend` for one full release after panel cutover.
+- Which loader icons are custom assets versus lucide icons.
+- Whether to introduce route-level tests with Playwright before or after the first panel cutover.
+- Whether server file editing needs a richer editor or should stay a fast textarea for v1.
+
+## Non-Goals
+
+- No backend API redesign as part of the panel migration.
+- No SSR requirement for the installed dashboard.
+- No marketing-site merge.
+- No release process rewrite beyond changing which static build is packaged.
+- No destructive hotkeys.

@@ -60,6 +60,8 @@ bun run lint
 bun run build
 ```
 
+The website publishes `install.sh`, `update.sh`, and `uninstall.sh` from the repository `tools/` directory. `bun run dev`, `bun run build`, and `bun run start` automatically run `bun run sync:scripts`, which copies those scripts into `apps/website/public/` so they are available as `/install.sh`, `/update.sh`, and `/uninstall.sh`.
+
 ## Tests
 
 Run backend tests from the repository root:
@@ -87,3 +89,5 @@ The test suite covers app factory behavior, storage, routes, installers, Java co
 | `apps/website/src/routes/` | Marketing/docs route files. |
 | `apps/website/content/docs/` | Canonical documentation content. |
 | `tools/install.sh` | Release installer. |
+| `tools/update.sh` | Native update wrapper copied to the website public root. |
+| `tools/uninstall.sh` | Native uninstall helper copied to the website public root. |

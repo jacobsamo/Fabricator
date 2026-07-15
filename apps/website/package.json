@@ -4,8 +4,12 @@
   "type": "module",
   "sideEffects": false,
   "scripts": {
+    "sync:scripts": "node scripts/sync-public-scripts.mjs",
+    "predev": "bun run sync:scripts",
     "dev": "vite dev",
+    "prebuild": "bun run sync:scripts",
     "build": "vite build",
+    "prestart": "bun run sync:scripts",
     "start": "serve .output/public --config ../../serve.json",
     "preview": "vite preview",
     "types:check": "fumadocs-mdx && tsc --noEmit",

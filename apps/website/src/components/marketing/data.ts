@@ -129,6 +129,8 @@ export const platforms: MarketingPlatform[] = [
     ],
     links: [
       ['Download install.sh', 'https://fabricator.site/install.sh'],
+      ['Download update.sh', 'https://fabricator.site/update.sh'],
+      ['Download uninstall.sh', 'https://fabricator.site/uninstall.sh'],
       ['View script source', 'https://github.com/philderks/Fabricator/blob/main/tools/install.sh'],
       ['Read the docs', '/docs'],
     ],

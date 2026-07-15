@@ -19,6 +19,14 @@ or:
 curl -fsSL https://fabricator.site/install.sh | bash -s -- --update
 ```
 
+The website also publishes the current update wrapper:
+
+```bash
+curl -fsSL https://fabricator.site/update.sh | bash
+```
+
+This is useful when you want the latest public update wrapper instead of the copy already installed under `/opt/fabricator/app/tools/update.sh`.
+
 The dashboard can also trigger a self-update when GitHub Releases reports a newer version. In-app updates run the bundled `tools/update.sh` wrapper through a limited sudoers rule installed at `/etc/sudoers.d/fabricator-self-update`.
 
 Before replacing app files, update mode backs up important state into `/var/lib/fabricator/update-backups/<timestamp>/`.

@@ -23,3 +23,5 @@ Ignore generated dependency/build folders such as `node_modules`, `dist`, `.outp
 When changing user-facing behavior, install steps, configuration, CLI/API behavior, troubleshooting, architecture, or contributor workflow, update the matching docs in `apps/website/content/docs/` in the same change.
 
 Keep root docs (`README.md`, `CONTRIBUTING.md`, `API_DOCS.md`) concise and pointed at the canonical Fumadocs pages.
+
+The website publishes `tools/install.sh`, `tools/update.sh`, and `tools/uninstall.sh` as `/install.sh`, `/update.sh`, and `/uninstall.sh`; `apps/website/scripts/sync-public-scripts.mjs` keeps `apps/website/public/` in sync before dev/build/start.
