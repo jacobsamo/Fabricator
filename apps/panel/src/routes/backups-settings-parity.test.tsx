@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { backupConfigPayload } from "@/forms/backup-config-form";
+import { queryClient } from "@/lib/query-client";
 import { areServerPropertiesDirty, defaultServerProperties } from "@/lib/server-settings";
 import { backupsUiStoreActions } from "@/stores/backups-ui-store";
 import { backupFixtures, javaFixtures, playitFixtures, serverFixtures } from "@/test/fixtures";
@@ -9,6 +10,7 @@ import { renderPanelRoute } from "@/test/render";
 
 afterEach(() => {
   backupsUiStoreActions.reset();
+  queryClient.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -60,6 +62,20 @@ describe("backups route parity", () => {
     expect(await screen.findByText("Archive files retained on disk")).toBeInTheDocument();
     expect(screen.getByText(/2 archive files were kept for Daily/)).toBeInTheDocument();
   });
+
+  it("surfaces deleted archive files when purging a config", async () => {
+    const { user } = renderPanelRoute({ route: "/server/survival/backups" });
+
+    await user.click(await screen.findByRole("button", { name: "Schedules" }));
+    await user.click(screen.getByRole("button", { name: /Daily .*snapshots/ }));
+    await user.click(screen.getByRole("button", { name: /Delete config/ }));
+    await user.click(screen.getByText("Purge archive files"));
+    await user.click(screen.getByRole("button", { name: /Delete config/ }));
+
+    expect(await screen.findByText("Archive files removed from disk")).toBeInTheDocument();
+    expect(screen.getByText(/2 archive files were removed for Daily/)).toBeInTheDocument();
+  });
+
 
   it("renders world import upload progress and upload failure", async () => {
     class FakeUploadXhr {
@@ -123,6 +139,38 @@ describe("playit route parity", () => {
 
     await user.click(await screen.findByRole("button", { name: /Disable/ }));
     await user.click(screen.getAllByRole("button", { name: /^Disable$/ }).at(-1)!);
+    expect(await screen.findByRole("button", { name: /Enable playit.gg/ })).toBeInTheDocument();
+  });
+
+  it("starts the shared agent from stopped state", async () => {
+    const { user } = renderPanelRoute({
+      route: "/server/survival/playit",
+      api: { playitStatus: { status: "stopped", tunnels: [], tunnels_known: false } },
+    });
+
+    await user.click(await screen.findByRole("button", { name: /Enable playit.gg/ }));
+
+    expect(await screen.findByText("Connecting tunnel agent...")).toBeInTheDocument();
+  });
+
+  it("cancels claim setup and can reset to a different account", async () => {
+    const { user, unmount } = renderPanelRoute({
+      route: "/server/survival/playit",
+      api: { playitStatus: { status: "claiming", claim_url: "https://playit.gg/claim/test", tunnels: [], tunnels_known: false } },
+    });
+
+    expect(await screen.findByText(/Open this link/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Cancel setup/ }));
+    expect(await screen.findByRole("button", { name: /Enable playit.gg/ })).toBeInTheDocument();
+
+    unmount();
+    queryClient.clear();
+    const reset = renderPanelRoute({
+      route: "/server/survival/playit",
+      api: { playitStatus: { status: "claiming", claim_url: "https://playit.gg/claim/test", tunnels: [], tunnels_known: false } },
+    });
+
+    await reset.user.click(await screen.findByRole("button", { name: /Use different account/ }));
     expect(await screen.findByRole("button", { name: /Enable playit.gg/ })).toBeInTheDocument();
   });
 
@@ -203,6 +251,20 @@ describe("properties and settings parity", () => {
 
     await user.click(screen.getByRole("button", { name: "Install" }));
     expect(await screen.findByText(/Downloading 50.0 MB of 100 MB \(50%\)/)).toBeInTheDocument();
+  });
+
+  it("shows Java terminal install success", async () => {
+    const { user } = renderPanelRoute({
+      route: "/server/survival/settings",
+      api: {
+        javaInstalled: { managed: [], system: { installed: false } },
+        javaInstallProgress: javaFixtures.installProgress,
+      },
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Install" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Java 21 installed.");
   });
 
   it("validates password changes and surfaces backend and 401 errors", async () => {

@@ -5,6 +5,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { setUnauthorizedHandler } from "@/api/client";
 import { authFixtures, playerFixtures, serverFixtures } from "@/test/fixtures";
 import { queryClient } from "@/lib/query-client";
+import { queryKeys } from "@/lib/query-keys";
 import { mockServer } from "@/test/msw/server";
 import { renderPanelRoute } from "@/test/render";
 import { modsUiStoreActions } from "@/stores/mods-ui-store";
@@ -37,6 +38,7 @@ function basePlayersState() {
 
 afterEach(() => {
   modsUiStoreActions.reset();
+  queryClient.clear();
   vi.restoreAllMocks();
 });
 
@@ -138,6 +140,32 @@ describe("players route parity", () => {
 
     await waitFor(() => expect(onUnauthorized).toHaveBeenCalledTimes(1));
   });
+
+  it("keeps the kick reason editor open when kicking an online player fails", async () => {
+    let kickBody: Record<string, unknown> | null = null;
+    queryClient.setQueryData(queryKeys.session.server("survival"), serverFixtures.detail);
+    queryClient.setQueryData(["session", "server", "survival", "players", "online"], playerFixtures.online);
+    const { user } = renderPanelRoute({
+      route: "/server/survival/players",
+      api: { playersState: basePlayersState(), onlinePlayers: playerFixtures.online },
+    });
+    mockServer.use(
+      http.post("/api/servers/:serverId/players/kick", async ({ request }) => {
+        kickBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ error: "Kick failed" }, { status: 500 });
+      }),
+    );
+
+    expect(await screen.findByText("Alex")).toBeInTheDocument();
+    expect(await screen.findByText("online")).toBeInTheDocument();
+    await user.click(playerRow("Alex").getByRole("button", { name: "Kick" }));
+    await user.type(screen.getByPlaceholderText("Kick reason..."), "Too much lava");
+    await user.click(playerRow("Alex").getByRole("button", { name: "Kick" }));
+
+    await waitFor(() => expect(kickBody).toMatchObject({ name: "Alex", reason: "Too much lava" }));
+    expect(screen.getByPlaceholderText("Kick reason...")).toHaveValue("Too much lava");
+    expect(playerRow("Alex").getByText("online")).toBeInTheDocument();
+  });
 });
 
 describe("mods and Modrinth route parity", () => {
@@ -185,15 +213,40 @@ describe("mods and Modrinth route parity", () => {
   it("keeps Modrinth search results available after an install failure", async () => {
     const { user } = renderPanelRoute({ route: "/server/survival/mods" });
     mockServer.use(
+      http.get("/api/modrinth/search", () =>
+        HttpResponse.json({
+          hits: [{ project_id: "AANobbMI", slug: "sodium", title: "Sodium", author: "jellysquid3", downloads: 1234 }],
+        }),
+      ),
       http.post("/api/modrinth/mod/:modId/install", () => HttpResponse.json({ error: "Install failed" }, { status: 500 })),
     );
     await user.click(await screen.findByRole("button", { name: "Browse mods" }));
-    await waitFor(() => expect(screen.getAllByText("Fabric API").length).toBeGreaterThan(1));
+    await waitFor(() => expect(screen.getByText("Sodium")).toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: "Install" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Install" })).toBeEnabled());
-    expect(screen.getAllByText("Fabric API").length).toBeGreaterThan(1);
+    expect(screen.getByText("Sodium")).toBeInTheDocument();
+  });
+
+  it("marks already installed Modrinth mods and prevents duplicate installs", async () => {
+    let installCount = 0;
+    const { user } = renderPanelRoute({ route: "/server/survival/mods" });
+    mockServer.use(
+      http.post("/api/modrinth/mod/:modId/install", () => {
+        installCount += 1;
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Browse mods" }));
+    await waitFor(() => expect(screen.getAllByText("Fabric API").length).toBeGreaterThan(1));
+
+    const installedButton = screen.getByRole("button", { name: "Installed" });
+    expect(installedButton).toBeDisabled();
+    await user.click(installedButton);
+
+    expect(installCount).toBe(0);
   });
 
   it("requires confirmation before replacing an active modpack and sends clean install options", async () => {
@@ -233,5 +286,165 @@ describe("mods and Modrinth route parity", () => {
       }),
     );
     expect(confirm).toHaveBeenCalledWith("Replace the current modpack with Fabric API? Fabricator will request a backup before installing.");
+  });
+
+  it("checks compatibility before installing a Modrinth mod", async () => {
+    let installBody: Record<string, unknown> | null = null;
+    const { user } = renderPanelRoute({ route: "/server/survival/mods" });
+    mockServer.use(
+      http.get("/api/modrinth/search", () =>
+        HttpResponse.json({
+          hits: [{ project_id: "AANobbMI", slug: "sodium", title: "Sodium", versions: ["1.20.1"] }],
+        }),
+      ),
+      http.get("/api/modrinth/mod/:modId/versions", () =>
+        HttpResponse.json([{ id: "version-compatible", version_number: "2.0.0", game_versions: ["1.21.4"] }]),
+      ),
+      http.post("/api/modrinth/mod/:modId/install", async ({ request }) => {
+        installBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Browse mods" }));
+    await waitFor(() => expect(screen.getByText("Sodium")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Install" }));
+
+    expect(await screen.findByText("Compatibility Warning")).toBeInTheDocument();
+    expect(screen.getByText("2.0.0")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Install selected version" }));
+
+    await waitFor(() =>
+      expect(installBody).toMatchObject({
+        server_id: "survival",
+        mc_version: "1.21.4",
+        loader: "fabric",
+      }),
+    );
+  });
+
+  it("installs required Modrinth dependencies before the selected mod when requested", async () => {
+    const installOrder: string[] = [];
+    const { user } = renderPanelRoute({ route: "/server/survival/mods" });
+    mockServer.use(
+      http.get("/api/modrinth/search", () =>
+        HttpResponse.json({
+          hits: [{ project_id: "AANobbMI", slug: "sodium", title: "Sodium", versions: ["1.21.4"] }],
+        }),
+      ),
+      http.get("/api/modrinth/project/:projectId/resolve-version", () =>
+        HttpResponse.json({
+          version: {
+            dependencies: [{ dependency_type: "required", project_id: "dep-api" }],
+          },
+        }),
+      ),
+      http.get("/api/modrinth/mod/:modId", ({ params }) =>
+        HttpResponse.json(
+          params.modId === "dep-api"
+            ? { id: "dep-api", slug: "dependency-api", title: "Dependency API" }
+            : { id: "AANobbMI", slug: "sodium", title: "Sodium" },
+        ),
+      ),
+      http.post("/api/modrinth/mod/:modId/install", async ({ params, request }) => {
+        await request.json();
+        installOrder.push(String(params.modId));
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Browse mods" }));
+    await waitFor(() => expect(screen.getByText("Sodium")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Install" }));
+
+    expect(await screen.findByText("Missing dependencies")).toBeInTheDocument();
+    expect(screen.getByText("Dependency API")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Install with dependencies" }));
+
+    await waitFor(() => expect(installOrder).toEqual(["dep-api", "AANobbMI"]));
+  });
+
+  it("continues a modpack install without missing files after a 409 continuation response", async () => {
+    const activeServer = {
+      ...serverFixtures.detail,
+      modpack: { projectId: "old-pack", name: "Old Pack", version: "1.0.0", mcVersion: "1.21.4", loaders: ["fabric"] },
+    };
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const installBodies: Record<string, unknown>[] = [];
+    const { user } = renderPanelRoute({
+      route: "/server/survival/mods",
+      api: { serverDetail: activeServer },
+    });
+    mockServer.use(
+      http.post("/api/modrinth/modpack/:projectId/install", async ({ request }) => {
+        installBodies.push((await request.json()) as Record<string, unknown>);
+        if (installBodies.length === 1) {
+          return HttpResponse.json(
+            {
+              error: "Missing files",
+              can_continue_with_missing: true,
+              missing_files: [{ path: "mods/missing.jar", reason: "Download unavailable" }],
+            },
+            { status: 409 },
+          );
+        }
+        return HttpResponse.json({ jobId: "modpack-1" });
+      }),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Browse modpacks" }));
+    await waitFor(() => expect(screen.getAllByText("Fabric API").length).toBeGreaterThan(1));
+    await user.click(screen.getByRole("button", { name: "Replace" }));
+
+    expect(await screen.findByText("Modpack files are unavailable")).toBeInTheDocument();
+    expect(screen.getByText("mods/missing.jar")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Continue without missing files" }));
+
+    await waitFor(() => expect(installBodies).toHaveLength(2));
+    expect(installBodies[1]).toMatchObject({
+      allow_missing: true,
+      clean_install: false,
+      create_backup: false,
+    });
+  });
+
+  it("continues a modpack install with server/client side decisions after a 409 continuation response", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const installBodies: Record<string, unknown>[] = [];
+    const { user } = renderPanelRoute({ route: "/server/survival/mods" });
+    mockServer.use(
+      http.post("/api/modrinth/modpack/:projectId/install", async ({ request }) => {
+        installBodies.push((await request.json()) as Record<string, unknown>);
+        if (installBodies.length === 1) {
+          return HttpResponse.json(
+            {
+              error: "Uncertain mod sides",
+              can_continue_with_uncertain: true,
+              uncertain_mod_files: [{ path: "overrides/mods/visual.jar", reason: "Side metadata missing" }],
+            },
+            { status: 409 },
+          );
+        }
+        return HttpResponse.json({ jobId: "modpack-1" });
+      }),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Browse modpacks" }));
+    await waitFor(() => expect(screen.getAllByText("Fabric API").length).toBeGreaterThan(1));
+    await user.click(screen.getByRole("button", { name: "Install" }));
+
+    expect(await screen.findByText("Choose mod sides")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Server" }));
+    await user.click(screen.getByRole("button", { name: "Apply decisions" }));
+
+    await waitFor(() => expect(installBodies).toHaveLength(2));
+    expect(installBodies[1]).toMatchObject({
+      clean_install: false,
+      create_backup: false,
+      mod_side_overrides: { "overrides/mods/visual.jar": "server" },
+    });
   });
 });

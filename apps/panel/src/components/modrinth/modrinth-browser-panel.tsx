@@ -18,6 +18,7 @@ type ModrinthBrowserPanelProps = {
   installLabel: string;
   onQueryChange: (query: string) => void;
   onInstall: (hit: ModrinthSearchHit) => void;
+  getInstallState?: (hit: ModrinthSearchHit) => { disabled?: boolean; label?: string; title?: string };
   onClose: () => void;
 };
 
@@ -32,6 +33,7 @@ export function ModrinthBrowserPanel({
   installLabel,
   onQueryChange,
   onInstall,
+  getInstallState,
   onClose,
 }: ModrinthBrowserPanelProps) {
   return (
@@ -56,6 +58,7 @@ export function ModrinthBrowserPanel({
         <div className="grid gap-2">
           {results.map((hit) => {
             const id = hit.project_id || hit.slug || hit.title;
+            const installState = getInstallState?.(hit) ?? {};
             return (
               <article className="flex gap-3 rounded-md border border-border bg-card p-3" key={id}>
                 <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-muted">
@@ -72,9 +75,9 @@ export function ModrinthBrowserPanel({
                     {hit.latest_version ? <span>latest {hit.latest_version}</span> : null}
                   </div>
                 </div>
-                <Button disabled={installingId === id} size="sm" onClick={() => onInstall(hit)}>
+                <Button disabled={installState.disabled || installingId === id} size="sm" title={installState.title} variant={installState.disabled ? "ghost" : "default"} onClick={() => onInstall(hit)}>
                   <Download />
-                  {installingId === id ? "Installing" : installLabel}
+                  {installingId === id ? "Installing" : (installState.label ?? installLabel)}
                 </Button>
               </article>
             );

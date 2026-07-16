@@ -35,6 +35,7 @@ Completed:
 - Implemented the first shell/navigation/update UX pass: sidebar server switcher, disabled navigation without a selected server, vanilla-server Mods hiding, topbar breadcrumbs/status/actions, command palette, update polling, confirmation, and toasts.
 - Implemented the first overview, console, and files route pass: runtime cards, recent logs, installed-mod preview, console merge/filter/auto-scroll/command submit, file breadcrumbs, text-file gating, dirty editor Store, discard confirmation, and save/open/copy feedback.
 - Implemented the first players, mods, and Modrinth/modpack browsing pass: player state, running-only online polling, search/filter, player mutations with optimistic rollback, installed-mod list/search/selection/bulk delete, Modrinth mod search/install, and basic modpack search/install/replace confirmation.
+- Ported the Vue Modrinth continuation flows into the React mods route: compatibility preflight, missing dependency choice with prerequisite install sequencing, modpack missing-file continuation, and uncertain server/client side decisions.
 - Implemented the first backups, playit, properties, settings, Java manager, and change-password route/form pass and verified the panel still passes build, typecheck, lint, and tests.
 - Added static route-level code splitting with TanStack Router lazy route components and Vite vendor chunk groups. The panel still builds to static `dist/` assets for Flask, native installs, and Docker.
 - Fixed the integrated TanStack Store helper typing so action Stores and plain UI Stores both work in route code.
@@ -55,9 +56,9 @@ In progress:
 - Workstream C shell/navigation/update UX. The first implementation pass and fixture tests are in place for the shell. Remaining work is richer update-state fixture coverage and packaged update smoke testing.
 - Workstream D create/install. The core create-server flow now exists in React. Remaining work is optional modpack-on-create parity and broader Java/install failure continuation tests.
 - Workstreams E/F overview, console, and files. The first implementation pass and route tests are in place. Remaining work is exhaustive status-state coverage, route-change dirty-editor confirmation, and packaged deep-link smoke coverage.
-- Workstreams G/H players, mods, and modpacks. Players/mods route tests now cover online polling, optimistic rollback for whitelist/op/ban/IP-ban, session expiry, installed-mod deletion, Modrinth install failure, and modpack replace confirmation. Remaining work is kick rollback plus advanced dependency, compatibility, missing-file, and uncertain-side continuation flows.
-- Workstreams I/J backups, playit, properties, settings, Java, and password. Route/form tests now cover backup configs, quick backup, restore, import upload progress failure retention, playit controls, properties dirty/running guard, autostart, Java install/remove, and password validation. Remaining work is full playit claim-to-running lifecycle, Java terminal success polish, and XHR upload abstraction parity.
-- Full shadcn component installation and tuning. The core panel primitive layer is now in place, but remaining future route work should continue adding primitives as needed, especially for dependency dialogs, compatibility pickers, multiselect/listbox controls, sheets, richer tables, and advanced file/modpack flows.
+- Workstreams G/H players, mods, and modpacks. Players/mods route tests now cover online polling, optimistic rollback for whitelist/op/ban/IP-ban, kick failure retry behavior, session expiry, installed-mod deletion, Modrinth already-installed affordances, Modrinth install failure, modpack replace confirmation, Modrinth compatibility preflight, missing dependency sequencing, missing-file continuation, and uncertain-side continuation. Remaining work is Modrinth update/detail browsing affordances and richer visual browsing parity.
+- Workstreams I/J backups, playit, properties, settings, Java, and password. Route/form tests now cover backup configs, retained/purged archive delete results, quick backup, restore, import upload progress failure retention, playit status rendering plus start/stop/reset/claim-cancel/account-reset controls, properties dirty/running guard, autostart, Java install/progress/success/remove, and password validation. Remaining work is XHR upload abstraction parity, deeper backup job terminal detail coverage, and broader Java state-machine edge coverage.
+- Full shadcn component installation and tuning. The core panel primitive layer is now in place, and the Modrinth dependency/compatibility/continuation dialogs now use the shared dialog, alert, and button primitives. Remaining future route work should continue adding primitives as needed, especially for multiselect/listbox controls, sheets, richer tables, and advanced file/modpack detail flows.
 - Vue parity capture screenshots/tests. React fixture tests now cover major flows, but the current Vue UI still needs captured screenshots or Playwright flows before replacement.
 - Release cutover. Production still serves `apps/frontend/dist`; Docker, installer/update scripts, Windows/PyInstaller, and release artifacts still need to build/copy `apps/panel/dist` into the compatible runtime `frontend/dist` path.
 
@@ -69,10 +70,11 @@ apps/panel type check: passes
 apps/panel lint: passes
 apps/panel tests: pass
 backend static fallback tests: pass
-current CSS bundle: 66.77 kB, 11.84 kB gzip
+current CSS bundle: 55.40 kB, 10.32 kB gzip
 static route split snapshot:
-  entry chunk: 56.45 kB, 15.39 kB gzip
-  largest route chunk: backups at 23.64 kB, 6.92 kB gzip
+  entry chunk: 56.48 kB, 15.40 kB gzip
+  largest route chunk: backups at 24.19 kB, 7.03 kB gzip
+  mods route chunk: 23.71 kB, 6.90 kB gzip
   vendor-react chunk: 292.82 kB, 94.79 kB gzip
   vendor-tanstack chunk: 193.46 kB, 54.73 kB gzip
   vendor chunk: 184.04 kB, 57.02 kB gzip
@@ -311,12 +313,31 @@ The React panel currently has:
 | Area | Current React status |
 | --- | --- |
 | App scaffold | Vite React app exists in `apps/panel` and builds. |
-| Routing | TanStack Router route tree exists for all target URLs. Server child pages are placeholders. |
+| Routing | TanStack Router route tree exists for all target URLs, with lazy server child routes implemented for overview, console, players, mods, files, backups, playit, properties, and settings. |
 | Auth | Login/setup guards, global 401 handling, safe redirects, and logout session clearing are implemented. |
 | Query cache | Auth status and initial server queries exist with a `["session", ...]` cache root. |
-| UI system | Starter shadcn-style primitives, Fabricator color tokens, sidebar/topbar, global dialog host, command palette, and route-level UI exist. Full shadcn set is not installed/tuned yet. |
-| Server functionality | Real first-pass ports now exist for create server, install progress, overview, console, players, mods, files, backups, playit, properties, settings, Java manager, and change password. Advanced continuation flows remain open before cutover. |
+| UI system | shadcn-style primitives, Fabricator color tokens, sidebar/topbar, global dialog host, command palette, and route-level UI exist. Remaining UI work is tuning/replacing route-specific controls where a shadcn/Base UI primitive should own the interaction. |
+| Server functionality | Real first-pass ports now exist for create server, install progress, overview, console, players, mods, files, backups, playit, properties, settings, Java manager, and change password. The Current Parity Audit below lists the Vue behaviors that are not yet signed off. |
 | Tests | React route parity tests, MSW fixtures, and backend static fallback tests exist and pass. Vue parity capture tests/screenshots and packaged Docker smoke tests are still missing. |
+
+### Current Parity Audit - 2026-07-16
+
+This branch is not yet ready to claim that all existing Vue functionality has been ported. The React panel has first-pass coverage for every route, but the following Vue behaviors still need implementation or stronger verification before cutover:
+
+| Area | Vue source of truth | React status | Required before parity sign-off |
+| --- | --- | --- | --- |
+| Create server modpack flow | `components/modals/ServerCreateModal.vue`, `components/modals/ModpackBrowserModal.vue`, `composables/useModpackImport.js`, `stores/server.js` | Main create/install flow exists, but modpack setup during create is not ported. | Add custom/modpack setup mode, link/search Modrinth modpack import, selected pack display, post-create modpack install, missing-file continuation, uncertain-side continuation, and tests. |
+| Create server advanced fields | `components/modals/ServerCreateModal.vue` | React form covers the main install fields. Vue exposes additional world/game/server options during create. | Confirm backend payload support and either port view distance, level name/type, seed, Java path, structures, spawn toggles, online mode, whitelist, PvP, command blocks, and MOTD, or document them as intentionally moved to properties after create. |
+| Modpack browser link mode | `components/modals/ModpackBrowserModal.vue`, `composables/useModpackImport.js` | Mods route supports search/install and advanced continuation dialogs. Direct URL/slug import is still missing. | Port `parseProjectRef`, URL/slug resolution, project-type validation, not-found fallback to search, and route tests. |
+| Modrinth detail/update browsing | `components/modals/ModBrowserModal.vue`, `utils/enrichInstalledModsModrinth.js` | Install and already-installed affordances exist. Detail browsing and update affordances are still open. | Add details/update UI where Vue exposes enriched metadata or update paths, with fixture coverage. |
+| Files route-change protection | `views/server/ServerFilesPage.vue` | In-page dirty discard exists. Route-leave protection still needs proof. | Add route-change/blocker handling so unsaved file edits cannot be lost when navigating away, then cover it with a route test. |
+| Update lifecycle UX | `components/layout/AppSidebar.vue`, update store/API files | Update polling exists in the plan and partial shell work, but packaged self-update behavior is not fully proven. | Cover idle, available, in-progress, success, failure, disabled, and post-update refresh behavior against a packaged static build. |
+| Backup/import implementation detail | `stores/backups.js`, `components/backups/*` | Route tests cover main backup flows and terminal summaries. Upload abstraction and deeper job-detail parity remain open. | Match Vue XHR upload progress/cancel/error retention behavior and add terminal job detail tests. |
+| Java state machine edges | Java/settings Vue components and stores | Install progress, done state, and managed removal have route tests. | Add checking, needs-Java, downloading, installing, error, retry, cancel/close, and remove failure coverage. |
+| Vue visual capture | `apps/frontend/src` | No fixture-backed Vue screenshot/flow baseline exists yet. | Capture high-risk Vue flows before deleting or replacing the shipped frontend. |
+| Packaged runtime cutover | `tools/update.sh`, Docker files, backend static serving | Backend static fallback tests exist. | Build `apps/panel/dist`, package it into the compatible `frontend/dist` runtime path, then smoke refresh/deep-link navigation in Docker/release-style execution. |
+
+Ported route surfaces that still need final sign-off must pass the Vue Compliance Gate below. Do not remove `apps/frontend` or switch the installer/update path to `apps/panel` until this audit table is empty or every remaining row is explicitly accepted as a post-cutover non-goal.
 
 ## Detailed Vue Surface Map
 
@@ -558,9 +579,10 @@ Current compliance blockers:
 
 - Vue parity capture tests/screenshots do not yet exist for the highest-risk current flows.
 - Create-server/install progress is closer to Vue parity, but optional modpack setup during create and broader Java/install failure continuation tests remain open.
-- Advanced Modrinth/modpack flows still need dependency, compatibility, missing-file, and uncertain-side continuation coverage.
-- Backup job polling has route coverage for quick backup and terminal-state display, but retained/deleted/purged file result coverage remains open.
-- Java install progress and managed-Java removal have first route tests; Java terminal success toast polish and full state-machine coverage remain open.
+- Advanced Modrinth/modpack flows now have dependency, compatibility, missing-file, uncertain-side continuation, and already-installed coverage in `players-mods-parity.test.tsx`. Remaining Modrinth work is detail browsing polish, update affordances, and packaged smoke coverage.
+- Backup config deletion now surfaces retained and purged archive-file counts in route coverage; backup job polling has route coverage for quick backup and terminal-state display, with deeper terminal detail coverage still open.
+- playit now has route coverage for stopped, starting, claiming, error, unsupported, running address display, start, stop, reset, claim cancel, and account reset flows.
+- Java install progress, terminal success, and managed-Java removal have route coverage; broader Java state-machine edge coverage remains open.
 - Backend static fallback tests exist, but packaged Flask/Docker smoke tests still need to prove the split panel loads from `frontend/dist` after refresh/deep-link navigation.
 
 Fixture and parity coverage:
@@ -602,7 +624,7 @@ Use feature-sliced PRs. Every workstream must leave the panel building and must 
 
 ### Active Execution Board
 
-Last updated: 2026-07-15.
+Last updated: 2026-07-16.
 
 Parallel agents are working against disjoint ownership areas. A workstream only moves to complete when its exit gate has passed and the panel still passes typecheck, lint, tests, and build as applicable.
 
@@ -612,7 +634,7 @@ Parallel agents are working against disjoint ownership areas. A workstream only 
 | B: TanStack State Foundation | sub-agent Hypatia | Foundation landed; exit gate open | Store/query/API foundation passes integrated gates; mutation invalidation tests and raw-key cleanup still missing |
 | C: Shell, Navigation, and Update UX | sub-agent Mencius | Implementation landed; exit gate open | Shell/update UX passes integrated gates; fixture state coverage still missing |
 | D/E/F: Overview, Console, Files | sub-agent Halley | Implementation landed; exit gates open | Overview/console/files pass integrated gates; status/dirty-editor parity tests still missing |
-| G/H: Players, Mods, Modpacks | sub-agent Jason | Implementation landed; exit gates open | Players/mods foundations pass integrated gates; advanced Modrinth/modpack parity tests still missing |
+| G/H: Players, Mods, Modpacks | sub-agent Jason | Advanced continuation parity landed; exit gates open | Players/mods foundations pass integrated gates; dependency/compatibility/missing-file/uncertain-side/kick/already-installed tests pass; update/detail browsing polish still missing |
 | I/J: Backups, playit, Properties, Settings, Java, Password | sub-agent Gauss | Implementation landed; exit gates open | Route/form foundations pass integrated gates; parity/job/form/progress tests still missing |
 
 Active follow-up agents, 2026-07-15:
@@ -621,8 +643,8 @@ Active follow-up agents, 2026-07-15:
 | --- | --- | --- | --- |
 | Auth/Fixtures | sub-agent Boole | Completed first pass | auth guards, MSW fixtures, route harness, session expiry tests; remaining work is Vue capture parity |
 | Core Server Routes | sub-agent Cicero | Completed first pass | server layout, overview, console, files, dirty editor tests; remaining work is exhaustive status/deep-link smoke coverage |
-| Players/Mods | sub-agent Averroes | Completed first pass | players, mods, Modrinth, modpack replace tests; remaining work is kick rollback and advanced continuation flows |
-| Backups/Settings | sub-agent Aristotle | Completed first pass | backups, playit, properties, settings, Java, password tests; remaining work is full playit/Java/job state-machine coverage |
+| Players/Mods | sub-agent Averroes | Advanced continuation pass landed | players, mods, Modrinth, modpack replace, dependency, compatibility, missing-file, uncertain-side, kick, and already-installed tests; remaining work is update/detail browsing polish |
+| Backups/Settings | sub-agent Aristotle | Expanded parity pass landed | backups retained/purged results, playit lifecycle, properties, settings, Java progress/success/remove, password tests; remaining work is upload abstraction and deeper Java/job edge coverage |
 | Static/Backend Smoke | sub-agent Tesla | Completed first pass | backend static serving, deep links, JSON 404 tests; remaining work is Docker/release/Windows packaged smoke coverage |
 | Create/Install Flow | parent integration | Completed first pass | create-server wizard, loader/version reload, Java preflight, EULA, install progress |
 

@@ -41,7 +41,7 @@ export function BackupsPage() {
   const [configFilter, setConfigFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [jobMeta, setJobMeta] = useState<Record<string, unknown> | null>(null);
-  const [retainedBanner, setRetainedBanner] = useState<Record<string, unknown> | null>(null);
+  const [archiveResultBanner, setArchiveResultBanner] = useState<Record<string, unknown> | null>(null);
   const [quickBackup, setQuickBackup] = useState<QuickBackupPayload>({ storagePath: "", compress: true, flush: true, shutdown: false });
   const [worldFile, setWorldFile] = useState<File | null>(null);
   const [actionError, setActionError] = useState("");
@@ -152,11 +152,13 @@ export function BackupsPage() {
       <BackupStatsStrip summary={summary} loading={summaryLoading} />
       {actionError ? <Alert variant="destructive"><AlertDescription>{actionError}</AlertDescription></Alert> : null}
       {activeJob ? <Alert><AlertDescription>Active {String(activeJob.kind || "backup")} job · {String(activeJob.phase || "starting")} {activeJob.active === false ? "(complete)" : "(polling...)"}</AlertDescription></Alert> : null}
-      {retainedBanner ? (
+      {archiveResultBanner ? (
         <Alert>
-          <AlertTitle>Archive files retained on disk</AlertTitle>
-          <AlertDescription>{String(retainedBanner.retained_files ?? 0)} archive files were kept for {String(retainedBanner.configName ?? "this config")}.</AlertDescription>
-          <Button className="absolute right-2 top-2 h-7 px-2 text-xs" variant="ghost" onClick={() => setRetainedBanner(null)}>Dismiss</Button>
+          <AlertTitle>{Number(archiveResultBanner.retained_files ?? 0) > 0 ? "Archive files retained on disk" : "Archive files removed from disk"}</AlertTitle>
+          <AlertDescription>
+            <ArchiveDeleteSummary result={archiveResultBanner} />
+          </AlertDescription>
+          <Button className="absolute right-2 top-2 h-7 px-2 text-xs" variant="ghost" onClick={() => setArchiveResultBanner(null)}>Dismiss</Button>
         </Alert>
       ) : null}
       <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-card p-3">
@@ -215,10 +217,23 @@ export function BackupsPage() {
       {ui.activeDialog === "quick-backup" ? <Modal title="Quick backup" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><QuickBackupForm value={quickBackup} onChange={setQuickBackup} defaultStoragePath={defaultStoragePath} disabled={quickBackupMutation.isPending} onSubmit={() => void runQuickBackup().catch(() => undefined)} /></Modal> : null}
       {ui.activeDialog === "restore" ? <Modal title="Restore snapshot" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><div className="grid gap-3 text-sm"><p className="text-muted-foreground">Choose how to restore this snapshot.</p><Button onClick={() => void restoreSnapshot("in_place").catch(() => undefined)}>Restore in place</Button><Button variant="destructive" onClick={() => void restoreSnapshot("reset").catch(() => undefined)}>Reset world then restore</Button></div></Modal> : null}
       {ui.activeDialog === "delete-snapshot" ? <Modal title="Delete snapshot" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><ConfirmBody action="Delete" pending={deleteSnapshot.isPending} onConfirm={async () => { if (ui.selectedSnapshotId) await deleteSnapshot.mutateAsync(ui.selectedSnapshotId); backupsUiStoreActions.setActiveDialog(null); }} /></Modal> : null}
-      {ui.activeDialog === "delete-config" ? <Modal title="Delete backup config" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><DeleteConfigBody pending={deleteConfig.isPending} onConfirm={async (purge) => { if (!ui.selectedConfigId) return; const config = configsById.get(ui.selectedConfigId); const result = await deleteConfig.mutateAsync({ configId: ui.selectedConfigId, purge }); if (result.retained_files) setRetainedBanner({ ...result, configName: config?.name }); backupsUiStoreActions.setActiveDialog(null); }} /></Modal> : null}
+      {ui.activeDialog === "delete-config" ? <Modal title="Delete backup config" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><DeleteConfigBody pending={deleteConfig.isPending} onConfirm={async (purge) => { if (!ui.selectedConfigId) return; const config = configsById.get(ui.selectedConfigId); const result = await deleteConfig.mutateAsync({ configId: ui.selectedConfigId, purge }); if (result.retained_files || result.deleted_files) setArchiveResultBanner({ ...result, configName: config?.name }); backupsUiStoreActions.setActiveDialog(null); }} /></Modal> : null}
       {ui.activeDialog === "import-world" ? <Modal title="Import world" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><div className="grid gap-3 text-sm"><p className="text-muted-foreground">Upload a zip, tar, or tar.gz archive to replace the active world.</p><label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">World archive<Input type="file" onChange={(event) => setWorldFile(event.target.files?.[0] || null)} /></label>{ui.uploadProgress !== null ? <div className="grid gap-2">{ui.uploadProgress < 0 ? <p>Upload progress: working...</p> : <><p>Upload progress: {ui.uploadProgress}%</p><Progress value={ui.uploadProgress} /></>}</div> : null}<div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => abortUploadRef.current?.()} disabled={!uploadWorld.isPending}>Cancel upload</Button><Button disabled={!worldFile || uploadWorld.isPending || Boolean(activeJob?.active)} onClick={() => void importWorld()}>{uploadWorld.isPending ? "Uploading..." : "Import"}</Button></div></div></Modal> : null}
     </div>
   );
+}
+
+function ArchiveDeleteSummary({ result }: { result: Record<string, unknown> }) {
+  const configName = String(result.configName ?? "this config");
+  const retained = typeof result.retained_files === "number" ? result.retained_files : 0;
+  const deleted = typeof result.deleted_files === "number" ? result.deleted_files : 0;
+  if (retained > 0 && deleted > 0) {
+    return <>{deleted} archive file{deleted === 1 ? " was" : "s were"} removed and {retained} archive file{retained === 1 ? " was" : "s were"} kept for {configName}.</>;
+  }
+  if (deleted > 0) {
+    return <>{deleted} archive file{deleted === 1 ? " was" : "s were"} removed for {configName}.</>;
+  }
+  return <>{retained} archive file{retained === 1 ? " was" : "s were"} kept for {configName}.</>;
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {

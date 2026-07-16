@@ -22,6 +22,7 @@ export function JavaManagerPanel() {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [deleteMajor, setDeleteMajor] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const progress = useQuery({
     queryKey: taskId ? queryKeys.session.java.installProgress(taskId) : ["session", "java", "install-progress", "none"],
     queryFn: () => getJavaInstallProgress(taskId || ""),
@@ -45,12 +46,23 @@ export function JavaManagerPanel() {
   useEffect(() => {
     const status = progress.data?.status;
     if (status === "done" || status === "error" || status === "cancelled") {
-      if (status === "done") void installed.refetch();
-      if (status === "error") setActionError(String(progress.data?.error || "The Java install failed."));
-      if (status === "cancelled") setActionError("Java install was cancelled.");
+      if (status === "done") {
+        const major = typeof progress.data?.install_major === "number" ? progress.data.install_major : selectedMajor;
+        setActionError("");
+        setSuccessMessage(`Java ${major} installed.`);
+        void installed.refetch();
+      }
+      if (status === "error") {
+        setSuccessMessage("");
+        setActionError(String(progress.data?.error || "The Java install failed."));
+      }
+      if (status === "cancelled") {
+        setSuccessMessage("");
+        setActionError("Java install was cancelled.");
+      }
       window.setTimeout(() => setTaskId(null), 1000);
     }
-  }, [progress.data?.status, installed]);
+  }, [progress.data?.status, progress.data?.install_major, installed, selectedMajor]);
 
   const downloaded = typeof progress.data?.downloaded === "number" ? progress.data.downloaded : 0;
   const total = typeof progress.data?.total === "number" ? progress.data.total : 0;
@@ -65,6 +77,7 @@ export function JavaManagerPanel() {
       <CardContent className="grid gap-4">
         {installed.isLoading ? <p className="text-sm text-muted-foreground">Loading Java runtimes...</p> : null}
         {installed.error ? <p className="text-sm text-destructive">{installed.error.message}</p> : null}
+        {successMessage ? <p className="text-sm text-success" role="status">{successMessage}</p> : null}
         {actionError ? <p className="text-sm text-destructive" role="alert">{actionError}</p> : null}
         <ul className="grid gap-2">
           {system?.installed ? (
@@ -99,13 +112,13 @@ export function JavaManagerPanel() {
                 </SelectContent>
               </Select>
             </label>
-            <Button size="sm" disabled={availableMajors.length === 0} onClick={async () => { setActionError(""); try { const task = await installJava(selectedMajor); setTaskId(String(task.task_id)); } catch (err) { setActionError(err instanceof Error ? err.message : "Failed to start Java install."); } }}>Install</Button>
+            <Button size="sm" disabled={availableMajors.length === 0} onClick={async () => { setActionError(""); setSuccessMessage(""); try { const task = await installJava(selectedMajor); setTaskId(String(task.task_id)); } catch (err) { setActionError(err instanceof Error ? err.message : "Failed to start Java install."); } }}>Install</Button>
           </div>
         )}
         {deleteMajor !== null ? (
           <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
             <p className="text-sm">Remove Java {deleteMajor}? Servers that need it will prompt for reinstall next start.</p>
-            <div className="mt-3 flex justify-end gap-2"><Button variant="ghost" size="sm" onClick={() => setDeleteMajor(null)}>Cancel</Button><Button variant="destructive" size="sm" onClick={async () => { setActionError(""); try { await uninstallJava(deleteMajor); setDeleteMajor(null); await installed.refetch(); } catch (err) { setActionError(err instanceof Error ? err.message : `Failed to remove Java ${deleteMajor}.`); } }}>Remove</Button></div>
+            <div className="mt-3 flex justify-end gap-2"><Button variant="ghost" size="sm" onClick={() => setDeleteMajor(null)}>Cancel</Button><Button variant="destructive" size="sm" onClick={async () => { setActionError(""); setSuccessMessage(""); try { await uninstallJava(deleteMajor); setDeleteMajor(null); await installed.refetch(); } catch (err) { setActionError(err instanceof Error ? err.message : `Failed to remove Java ${deleteMajor}.`); } }}>Remove</Button></div>
           </div>
         ) : null}
       </CardContent>
