@@ -2,8 +2,9 @@ import { useMemo } from "react";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Archive, Boxes, FileText, Gauge, LayoutGrid, Network, Search, Server, Settings, Terminal, Users } from "lucide-react";
+import { Archive, Boxes, FileText, Gauge, LayoutGrid, Network, Server, Settings, Terminal, Users } from "lucide-react";
 
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog } from "@/components/ui/dialog";
 import { serversQuery } from "@/queries/servers";
 import { appStoreActions, useAppStore } from "@/stores/app-store";
@@ -77,30 +78,30 @@ export function CommandPalette() {
 
   return (
     <Dialog open={open} title="Command palette" onOpenChange={(nextOpen) => appStoreActions.setCommandPaletteOpen(nextOpen)} className="max-w-xl">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-muted-foreground">
-        <Search className="size-4" />
-        <span className="text-sm">Command search</span>
-        <kbd className="ml-auto rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
-      </div>
-      <div className="max-h-[50vh] overflow-y-auto p-2">
-        {commands.map((command) => (
-          <button
-            type="button"
-            key={`${command.description}:${command.label}`}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition hover:bg-accent hover:text-accent-foreground"
-            onClick={() => {
-              appStoreActions.setCommandPaletteOpen(false);
-              void command.run();
-            }}
-          >
-            <command.icon className="size-4 text-muted-foreground" />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{command.label}</span>
-              <span className="block truncate text-xs text-muted-foreground">{command.description}</span>
-            </span>
-          </button>
-        ))}
-      </div>
+      <Command>
+        <CommandInput placeholder="Command search" />
+        <CommandList>
+          <CommandEmpty>No commands found.</CommandEmpty>
+          <CommandGroup>
+            {commands.map((command) => (
+              <CommandItem
+                key={`${command.description}:${command.label}`}
+                value={`${command.label} ${command.description}`}
+                onSelect={() => {
+                  appStoreActions.setCommandPaletteOpen(false);
+                  void command.run();
+                }}
+              >
+                <command.icon className="size-4 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{command.label}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{command.description}</span>
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
     </Dialog>
   );
 }

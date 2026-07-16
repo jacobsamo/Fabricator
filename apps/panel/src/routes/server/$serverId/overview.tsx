@@ -56,9 +56,9 @@ export function OverviewPage() {
   return (
     <div className="flex flex-col gap-4">
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Players" value={players?.online ?? 0} unit={players?.max ? `/${players.max}` : ""} />
-        <StatCard label="Uptime" value={String(runtime.uptime ?? "-")} />
-        <StatCard label="Version" value={server.data?.version || "-"} />
+        <StatCard label="Players" value={players?.online ?? 0} unit={(players?.max ?? server.data?.maxPlayers) ? `/${players?.max ?? server.data?.maxPlayers}` : ""} />
+        <StatCard label="Uptime" value={String(runtime.uptime ?? "—")} />
+        <StatCard label="Version" value={server.data?.version || "—"} />
         <StatCard label="Mods" value={mods.data?.length ?? 0} accent={(mods.data?.length ?? 0) > 0} />
       </section>
 
@@ -129,7 +129,7 @@ export function OverviewPage() {
                 ["Backups", "Manage snapshots", "/server/$serverId/backups"],
                 ["Console", "View logs", "/server/$serverId/console"],
                 ["Properties", "server.properties", "/server/$serverId/properties"],
-                ["Files", "Browse server files", "/server/$serverId/files"],
+                ["World", "Manage in settings", "/server/$serverId/settings"],
               ].map(([title, subtitle, to]) => (
                 <Link
                   key={title}

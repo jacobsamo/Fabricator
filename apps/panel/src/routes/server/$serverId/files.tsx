@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 import { useParams } from "@tanstack/react-router";
@@ -8,14 +8,17 @@ import { toast } from "sonner";
 import * as serversApi from "@/api/servers";
 import { ServerPanel } from "@/components/server/server-panel";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { formatFileSize, formatTimestamp } from "@/lib/format";
-import { isTextFile, parentPath, pathBreadcrumbs } from "@/lib/files";
+import { copyText, isTextFile, parentPath, pathBreadcrumbs } from "@/lib/files";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { serverFilesQuery } from "@/queries/servers";
 import {
   closeEditor,
   fileEditorStore,
+  fileEditorStoreActions,
   markEditorSaved,
   openEditor,
   updateEditorContent,
@@ -26,6 +29,7 @@ export function FilesPage() {
   const queryClient = useQueryClient();
   const [currentPath, setCurrentPath] = useState("");
   const [openingPath, setOpeningPath] = useState<string | null>(null);
+  const discardResolver = useRef<((discard: boolean) => void) | null>(null);
   const editor = useStore(fileEditorStore, (state) => state);
   const hasFileChanges = Boolean(editor.path && editor.content !== editor.originalContent);
 
@@ -48,18 +52,35 @@ export function FilesPage() {
     setCurrentPath("");
   }, [serverId]);
 
+  useEffect(() => () => {
+    if (discardResolver.current) {
+      discardResolver.current(false);
+      discardResolver.current = null;
+    }
+  }, []);
+
   function confirmDiscard() {
     if (!hasFileChanges) return true;
-    return window.confirm("Discard unsaved changes? Continuing will discard your edits.");
+    fileEditorStoreActions.setDiscardPromptOpen(true);
+    return new Promise<boolean>((resolve) => {
+      discardResolver.current = resolve;
+    });
+  }
+
+  function resolveDiscard(discard: boolean) {
+    fileEditorStoreActions.setDiscardPromptOpen(false);
+    if (discardResolver.current) {
+      discardResolver.current(discard);
+      discardResolver.current = null;
+    }
   }
 
   async function copyPath() {
     const path = files.data?.absolutePath;
     if (!path) return;
-    try {
-      await navigator.clipboard.writeText(path);
+    if (await copyText(path)) {
       toast.success("Path copied");
-    } catch {
+    } else {
       toast.error("Could not copy path");
     }
   }
@@ -69,7 +90,7 @@ export function FilesPage() {
       toast.error("Only supported text files can be edited");
       return;
     }
-    if (!confirmDiscard()) return;
+    if (!(await confirmDiscard())) return;
     setOpeningPath(path);
     try {
       const file = await queryClient.fetchQuery({
@@ -85,8 +106,8 @@ export function FilesPage() {
     }
   }
 
-  function browse(path: string) {
-    if (!confirmDiscard()) return;
+  async function browse(path: string) {
+    if (!(await confirmDiscard())) return;
     setCurrentPath(path);
   }
 
@@ -107,7 +128,7 @@ export function FilesPage() {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="sm" disabled={!canGoUp} onClick={() => browse(parentPath(files.data?.currentPath ?? currentPath))}>
+        <Button variant="ghost" size="sm" disabled={!canGoUp} onClick={() => void browse(parentPath(files.data?.currentPath ?? currentPath))}>
           <ChevronUp />
           Up
         </Button>
@@ -118,7 +139,7 @@ export function FilesPage() {
                 type="button"
                 className={cn("truncate rounded px-1 py-0.5 text-muted-foreground hover:bg-accent hover:text-foreground", index === breadcrumbs.length - 1 && "text-foreground")}
                 disabled={index === breadcrumbs.length - 1}
-                onClick={() => browse(crumb.path)}
+                onClick={() => void browse(crumb.path)}
               >
                 {crumb.label}
               </button>
@@ -158,8 +179,8 @@ export function FilesPage() {
                         <button
                           type="button"
                           className="flex min-w-0 items-center gap-2 text-left text-sm text-secondary-foreground"
-                          onClick={() => entry.isDir ? browse(path) : void openFile(path)}
-                          onDoubleClick={() => { if (entry.isDir) browse(path); }}
+                          onClick={() => entry.isDir ? void browse(path) : void openFile(path)}
+                          onDoubleClick={() => { if (entry.isDir) void browse(path); }}
                         >
                           {entry.isDir ? <Folder className="text-primary" /> : <File className="text-muted-foreground" />}
                           <span className="truncate">{entry.name}</span>
@@ -184,22 +205,35 @@ export function FilesPage() {
           action={
             <div className="flex items-center gap-2">
               {hasFileChanges ? <span className="text-xs text-warning">Unsaved changes</span> : null}
-              <Button variant="ghost" size="sm" disabled={saveFile.isPending} onClick={() => { if (confirmDiscard()) closeEditor(); }}>Close</Button>
+              <Button variant="ghost" size="sm" disabled={saveFile.isPending} onClick={async () => { if (await confirmDiscard()) closeEditor(); }}>Close</Button>
               <Button size="sm" disabled={!hasFileChanges || saveFile.isPending} onClick={() => saveFile.mutate()}>
                 Save
               </Button>
             </div>
           }
         >
-          <textarea
-            className="min-h-80 w-full resize-y rounded-md border border-border bg-secondary p-3 font-mono text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/35 disabled:opacity-60"
+          <Textarea
+            className="min-h-80 resize-y bg-secondary font-mono"
             value={editor.content}
             disabled={saveFile.isPending}
             spellCheck={false}
             onChange={(event) => updateEditorContent(event.target.value)}
           />
+          {saveFile.isError ? (
+            <p className="mt-2 text-sm text-destructive">{saveFile.error instanceof Error ? saveFile.error.message : "Failed to save file"}</p>
+          ) : null}
         </ServerPanel>
       ) : null}
+      <ConfirmDialog
+        open={editor.discardPromptOpen}
+        title="Discard unsaved changes?"
+        message="You have unsaved changes."
+        description="Continuing will discard your edits. This cannot be undone."
+        confirmText="Discard changes"
+        cancelText="Keep editing"
+        onCancel={() => resolveDiscard(false)}
+        onConfirm={() => resolveDiscard(true)}
+      />
     </div>
   );
 }

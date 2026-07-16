@@ -9,7 +9,7 @@ The goal is to ship a faster, more maintainable control panel without changing t
 
 ## Execution Status
 
-Last updated: 2026-07-15.
+Last updated: 2026-07-16.
 
 Completed:
 
@@ -39,19 +39,27 @@ Completed:
 - Added static route-level code splitting with TanStack Router lazy route components and Vite vendor chunk groups. The panel still builds to static `dist/` assets for Flask, native installs, and Docker.
 - Fixed the integrated TanStack Store helper typing so action Stores and plain UI Stores both work in route code.
 - Fixed integrated TanStack Form typing in the first backup config, server properties, and change-password forms.
+- Added a global create-server dialog wired to the app shell and empty-server CTAs. It covers loader/version selection, Java warnings, EULA gating, create/install submission, install progress polling, retry/background close, server-list invalidation, and navigation to the new server overview.
+- Added route parity tests for auth guards/forms, server list/create, overview/console/files, players/mods/Modrinth, backups/playit/properties/settings/Java/password, plus backend static fallback tests for panel assets and deep links.
+- Added fixture coverage for authenticated, unauthenticated, setup-required, auth-disabled, server states, files, logs, players, mods, Modrinth, backups, playit, Java, and update API responses.
+- Fixed the panel Vitest harness to run route files serially because the tests intentionally exercise the real singleton Router, QueryClient, and Store wiring.
+- Added and tuned the next shadcn/Base UI primitive layer: alert, breadcrumb, checkbox, command, dropdown-menu, popover, progress, radio-group, select, separator, sidebar, skeleton, switch, table, and textarea.
+- Replaced route-level raw selects, textareas, checkboxes, radios, ad hoc progress bars, alert panels, command palette markup, breadcrumbs, and sidebar shell markup with local reusable primitives where the new primitives exist.
+- Replaced the custom modal overlay internals with Base UI Dialog primitives while preserving the panel's local `Dialog` and `ConfirmDialog` exports.
+- Verified backend static-serving tests for the panel asset contract and JSON 404 behavior pass.
 - Verified `bun run test` succeeds for `apps/panel`.
 
 In progress:
 
-- Workstream B TanStack state foundation. The panel now has direct TanStack Store dependencies, narrow client/UI Store modules, expanded `["session", ...]` query keys, typed API clients for the Vue API surface, query/mutation helpers for servers, files/logs/mods, players, backups, playit, Java/update, and Modrinth, plus Store/query-key ownership tests. Mutation invalidation tests and route cleanup for any raw query-key arrays are still needed before the Workstream B exit gate is complete.
-- Workstream C shell/navigation/update UX. The first implementation pass is in place and the integrated panel gates pass; fixture verification for no-server, selected-server, vanilla-server, and update-available states is still needed before the exit gate is complete.
-- Workstreams E/F overview, console, and files. The first implementation pass is in place and the integrated panel gates pass; parity tests for all status states and the files dirty-editor safety contract are still needed before the exit gates are complete.
-- Workstreams G/H players, mods, and modpacks. The first implementation pass is in place and the integrated panel gates pass; dependency, compatibility, missing-file continuation, uncertain-side continuation, and mutation/session-expiry tests are still needed before the exit gates are complete.
-- Workstreams I/J backups, playit, properties, settings, Java, and password. The first implementation pass is in place and the integrated panel gates pass; parity review plus job/form/progress tests are still needed before the exit gates are complete.
-- Full shadcn component installation and tuning. The panel currently has starter local components, not the full shadcn component set.
-- Auth UI parity beyond login/setup shell polish, such as eventual password-change modal behavior.
-- Route parity. First-pass route implementations now exist across the major server pages, but parity gaps and tests remain before cutover.
-- Release cutover. Production still serves `apps/frontend/dist`.
+- Workstream B TanStack state foundation. The panel now has direct TanStack Store dependencies, narrow client/UI Store modules, expanded `["session", ...]` query keys, typed API clients for the Vue API surface, query/mutation helpers for servers, files/logs/mods, players, backups, playit, Java/update, and Modrinth, plus Store/query-key ownership tests. Remaining work is focused on mutation invalidation coverage for every Vue mutation and cleanup of any remaining raw query-key arrays.
+- Workstream C shell/navigation/update UX. The first implementation pass and fixture tests are in place for the shell. Remaining work is richer update-state fixture coverage and packaged update smoke testing.
+- Workstream D create/install. The core create-server flow now exists in React. Remaining work is optional modpack-on-create parity and broader Java/install failure continuation tests.
+- Workstreams E/F overview, console, and files. The first implementation pass and route tests are in place. Remaining work is exhaustive status-state coverage, route-change dirty-editor confirmation, and packaged deep-link smoke coverage.
+- Workstreams G/H players, mods, and modpacks. Players/mods route tests now cover online polling, optimistic rollback for whitelist/op/ban/IP-ban, session expiry, installed-mod deletion, Modrinth install failure, and modpack replace confirmation. Remaining work is kick rollback plus advanced dependency, compatibility, missing-file, and uncertain-side continuation flows.
+- Workstreams I/J backups, playit, properties, settings, Java, and password. Route/form tests now cover backup configs, quick backup, restore, import upload progress failure retention, playit controls, properties dirty/running guard, autostart, Java install/remove, and password validation. Remaining work is full playit claim-to-running lifecycle, Java terminal success polish, and XHR upload abstraction parity.
+- Full shadcn component installation and tuning. The core panel primitive layer is now in place, but remaining future route work should continue adding primitives as needed, especially for dependency dialogs, compatibility pickers, multiselect/listbox controls, sheets, richer tables, and advanced file/modpack flows.
+- Vue parity capture screenshots/tests. React fixture tests now cover major flows, but the current Vue UI still needs captured screenshots or Playwright flows before replacement.
+- Release cutover. Production still serves `apps/frontend/dist`; Docker, installer/update scripts, Windows/PyInstaller, and release artifacts still need to build/copy `apps/panel/dist` into the compatible runtime `frontend/dist` path.
 
 Current build snapshot:
 
@@ -60,14 +68,15 @@ apps/panel production build: passes
 apps/panel type check: passes
 apps/panel lint: passes
 apps/panel tests: pass
-current CSS bundle: 33.94 kB, 7.05 kB gzip
+backend static fallback tests: pass
+current CSS bundle: 66.77 kB, 11.84 kB gzip
 static route split snapshot:
-  entry chunk: 35.25 kB, 10.43 kB gzip
-  largest route chunk: backups at 23.29 kB, 6.62 kB gzip
-  vendor-react chunk: 182.16 kB, 57.34 kB gzip
-  vendor-tanstack chunk: 193.49 kB, 54.75 kB gzip
-  vendor chunk: 104.85 kB, 30.13 kB gzip
-  vendor-ui chunk: 42.67 kB, 12.58 kB gzip
+  entry chunk: 56.45 kB, 15.39 kB gzip
+  largest route chunk: backups at 23.64 kB, 6.92 kB gzip
+  vendor-react chunk: 292.82 kB, 94.79 kB gzip
+  vendor-tanstack chunk: 193.46 kB, 54.73 kB gzip
+  vendor chunk: 184.04 kB, 57.02 kB gzip
+  vendor-ui chunk: 43.00 kB, 12.70 kB gzip
 build note: no route page is in the initial entry bundle; remaining heavy chunks are shared vendor libraries and can be browser-cached across routes.
 ```
 
@@ -305,9 +314,9 @@ The React panel currently has:
 | Routing | TanStack Router route tree exists for all target URLs. Server child pages are placeholders. |
 | Auth | Login/setup guards, global 401 handling, safe redirects, and logout session clearing are implemented. |
 | Query cache | Auth status and initial server queries exist with a `["session", ...]` cache root. |
-| UI system | Starter button/card/input/badge and Fabricator color tokens exist. Full shadcn set is not installed/tuned yet. |
-| Server functionality | Server list redirect exists. Create server, install, route pages, players, mods, files, backups, playit, settings, Java, and change password still need real ports. |
-| Tests | No panel parity test suite exists yet. |
+| UI system | Starter shadcn-style primitives, Fabricator color tokens, sidebar/topbar, global dialog host, command palette, and route-level UI exist. Full shadcn set is not installed/tuned yet. |
+| Server functionality | Real first-pass ports now exist for create server, install progress, overview, console, players, mods, files, backups, playit, properties, settings, Java manager, and change password. Advanced continuation flows remain open before cutover. |
+| Tests | React route parity tests, MSW fixtures, and backend static fallback tests exist and pass. Vue parity capture tests/screenshots and packaged Docker smoke tests are still missing. |
 
 ## Detailed Vue Surface Map
 
@@ -532,6 +541,28 @@ Test migration order:
 
 Do this before considering the React panel a cutover candidate. The goal is to prove the first-pass route ports behave like the Vue system under realistic backend states without requiring a local Minecraft server.
 
+## Vue Compliance Gate
+
+A React route or component is only Vue-compliant when all of these are true:
+
+- The Vue source file has been read and mapped to the React implementation.
+- The React UI renders the same core data, empty states, loading states, disabled states, and backend-error states.
+- Every Vue mutation has an equivalent React mutation with matching success feedback, error feedback, query invalidation, and rollback behavior where Vue used optimistic state.
+- A simulated `401` from that feature clears protected `["session", ...]` data and routes through the same auth boundary as logout.
+- Polling starts, stops, and changes cadence for the same reasons as Vue.
+- Dialogs, confirmations, destructive actions, and dirty-state guards cannot lose user work silently.
+- At least one fixture or route test covers the happy path, failure path, and auth-expiry path for the feature.
+- The panel still passes `bun run types:check`, `bun run test`, `bun run lint`, and `bun run build`.
+
+Current compliance blockers:
+
+- Vue parity capture tests/screenshots do not yet exist for the highest-risk current flows.
+- Create-server/install progress is closer to Vue parity, but optional modpack setup during create and broader Java/install failure continuation tests remain open.
+- Advanced Modrinth/modpack flows still need dependency, compatibility, missing-file, and uncertain-side continuation coverage.
+- Backup job polling has route coverage for quick backup and terminal-state display, but retained/deleted/purged file result coverage remains open.
+- Java install progress and managed-Java removal have first route tests; Java terminal success toast polish and full state-machine coverage remain open.
+- Backend static fallback tests exist, but packaged Flask/Docker smoke tests still need to prove the split panel loads from `frontend/dist` after refresh/deep-link navigation.
+
 Fixture and parity coverage:
 
 - Expand MSW fixtures for running, stopped, pending, installing, failed, auth-expired, API-error, empty-list, and large-list states.
@@ -583,6 +614,17 @@ Parallel agents are working against disjoint ownership areas. A workstream only 
 | D/E/F: Overview, Console, Files | sub-agent Halley | Implementation landed; exit gates open | Overview/console/files pass integrated gates; status/dirty-editor parity tests still missing |
 | G/H: Players, Mods, Modpacks | sub-agent Jason | Implementation landed; exit gates open | Players/mods foundations pass integrated gates; advanced Modrinth/modpack parity tests still missing |
 | I/J: Backups, playit, Properties, Settings, Java, Password | sub-agent Gauss | Implementation landed; exit gates open | Route/form foundations pass integrated gates; parity/job/form/progress tests still missing |
+
+Active follow-up agents, 2026-07-15:
+
+| Agent | Owner | Status | Owned areas |
+| --- | --- | --- | --- |
+| Auth/Fixtures | sub-agent Boole | Completed first pass | auth guards, MSW fixtures, route harness, session expiry tests; remaining work is Vue capture parity |
+| Core Server Routes | sub-agent Cicero | Completed first pass | server layout, overview, console, files, dirty editor tests; remaining work is exhaustive status/deep-link smoke coverage |
+| Players/Mods | sub-agent Averroes | Completed first pass | players, mods, Modrinth, modpack replace tests; remaining work is kick rollback and advanced continuation flows |
+| Backups/Settings | sub-agent Aristotle | Completed first pass | backups, playit, properties, settings, Java, password tests; remaining work is full playit/Java/job state-machine coverage |
+| Static/Backend Smoke | sub-agent Tesla | Completed first pass | backend static serving, deep links, JSON 404 tests; remaining work is Docker/release/Windows packaged smoke coverage |
+| Create/Install Flow | parent integration | Completed first pass | create-server wizard, loader/version reload, Java preflight, EULA, install progress |
 
 Coordination rules:
 

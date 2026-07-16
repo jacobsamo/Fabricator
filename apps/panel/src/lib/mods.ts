@@ -2,7 +2,7 @@ import { del } from "@/api/client";
 import type { InstalledMod } from "@/api/schemas";
 
 export function installedModFilename(mod: InstalledMod) {
-  return mod.relativePath || mod.path || mod.name;
+  return mod.filename || mod.relativePath || mod.path || mod.name;
 }
 
 export function installedModDisplayName(mod: InstalledMod) {

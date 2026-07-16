@@ -29,6 +29,21 @@ export const authFixtures = {
   },
 } satisfies Record<string, RawAuthStatus>;
 
+export const authErrorFixtures = {
+  statusFailure: {
+    error: "Unable to reach auth status.",
+  },
+  loginFailure: {
+    error: "Incorrect password.",
+  },
+  setupFailure: {
+    error: "Unable to create operator password.",
+  },
+  expiredSession: {
+    error: "Session expired.",
+  },
+};
+
 export const serverFixtures = {
   empty: [] satisfies ServerSummary[],
   summaries: [
@@ -56,43 +71,115 @@ export const serverFixtures = {
     port: 25565,
     memory: "4G",
     path: "/srv/fabricator/servers/survival",
-    autostart: "manual",
-    settings: {
-      difficulty: "normal",
-      gamemode: "survival",
-      maxPlayers: 20,
-      motd: "Fabricator fixture server",
-      pvp: true,
+    autoStart: "never",
+    difficulty: "normal",
+    gamemode: "survival",
+    maxPlayers: 20,
+    motd: "Fabricator fixture server",
+    pvp: true,
+  },
+  running: {
+    id: "survival",
+    name: "Survival",
+    loader: "fabric",
+    status: "running",
+    version: "1.21.4",
+    port: 25565,
+    memory: 4,
+    maxPlayers: 20,
+    runtime: {
+      status: "running",
+      uptime: "2h 14m",
+      cpu: 42,
+      ram: { usedGB: 1.5, limitGB: 4 },
+      players: { online: 3, max: 20 },
     },
+    players: { online: 3, max: 20 },
+    modpack: { name: "Better MC", projectId: "better-mc", version: "v32" },
+  },
+  stopped: {
+    id: "survival",
+    name: "Survival",
+    loader: "fabric",
+    status: "stopped",
+    version: "1.21.4",
+    port: 25565,
+    memory: 4,
+    maxPlayers: 20,
+    runtime: { status: "stopped", players: { online: 0, max: 20 } },
+  },
+  pending: {
+    id: "survival",
+    name: "Survival",
+    loader: "fabric",
+    status: "pending",
+    version: "1.21.4",
+    port: 25565,
+    memory: 4,
+    maxPlayers: 20,
+    runtime: { status: "stopped" },
   },
   installing: {
-    id: "installing",
-    name: "Installing",
+    id: "survival",
+    name: "Survival",
     loader: "fabric",
     status: "installing",
     version: "1.21.4",
+    runtime: { status: "stopped" },
+  },
+  failed: {
+    id: "survival",
+    name: "Survival",
+    loader: "fabric",
+    status: "failed",
+    version: "1.21.4",
+    runtime: { status: "stopped" },
+  },
+  apiError: {
+    error: "Failed to load servers",
   },
 };
 
 export const logFixtures = {
-  recent: [
-    { id: "1", timestamp: "2026-07-15T00:00:00Z", stream: "stdout", level: "info", message: "Starting minecraft server" },
-    { id: "2", timestamp: "2026-07-15T00:00:03Z", stream: "stdout", level: "info", message: "Done (2.34s)! For help, type \"help\"" },
-  ],
+  recent: {
+    stdout: [
+      { ts: "2026-07-15T00:00:00Z", text: "[00:00:00] [Server thread/INFO]: Starting minecraft server" },
+      { ts: "2026-07-15T00:00:03Z", text: "[00:00:03] [Server thread/INFO]: Done (2.34s)! For help, type \"help\"" },
+    ],
+    stderr: [],
+    running: true,
+  },
+  mixed: {
+    stdout: [
+      { ts: "2026-07-15T00:00:03Z", text: "[00:00:03] [Server thread/INFO]: Done (2.34s)! For help, type \"help\"" },
+      { ts: "2026-07-15T00:00:01Z", text: "[00:00:01] [Server thread/WARN]: Missing config value" },
+    ],
+    stderr: [
+      { ts: "2026-07-15T00:00:02Z", text: "SEVERE: Port already in use" },
+      "Plain stderr without level",
+    ],
+    running: true,
+  },
 };
 
 export const fileFixtures = {
   root: {
-    path: "",
+    currentPath: "",
+    absolutePath: "/srv/fabricator/servers/survival",
     entries: [
-      { name: "world", path: "world", type: "directory" },
-      { name: "server.properties", path: "server.properties", type: "file", size: 1820, editable: true },
+      { name: "world", path: "/srv/fabricator/servers/survival/world", relativePath: "world", isDir: true, size: 4096, updatedAt: "2026-07-14T03:00:00Z" },
+      { name: "server.properties", path: "/srv/fabricator/servers/survival/server.properties", relativePath: "server.properties", isDir: false, size: 1820, updatedAt: "2026-07-14T03:01:00Z" },
+      { name: "server.jar", path: "/srv/fabricator/servers/survival/server.jar", relativePath: "server.jar", isDir: false, size: 123456, updatedAt: "2026-07-14T03:02:00Z" },
     ],
+  },
+  world: {
+    currentPath: "world",
+    absolutePath: "/srv/fabricator/servers/survival/world",
+    entries: [],
   },
   content: {
     path: "server.properties",
     content: "motd=Fabricator fixture server\nmax-players=20\n",
-    editable: true,
   },
 };
 
@@ -131,28 +218,53 @@ export const playerFixtures = {
 
 export const backupFixtures = {
   configs: [
-    { id: "daily", name: "Daily", enabled: true, schedule: "0 3 * * *", retention: 7, compress: true },
+    {
+      id: "daily",
+      name: "Daily",
+      storagePath: "/srv/fabricator/backups",
+      maxSnapshots: 7,
+      flush: true,
+      shutdown: false,
+      compress: true,
+      exclusions: ["logs/**"],
+      schedule: { enabled: true, frequencyHours: 24, timeOfDay: "03:00" },
+    },
   ],
   summary: {
     snapshotCount: 3,
     totalBytes: 8_192_000,
     lastSnapshotAt: "2026-07-14T03:00:00Z",
     nextRunAt: "2026-07-16T03:00:00Z",
+    defaultStoragePath: "/srv/fabricator/backups",
   },
   snapshots: [
-    { id: "snap-1", name: "Daily 2026-07-14", createdAt: "2026-07-14T03:00:00Z", sizeBytes: 4_096_000, status: "complete" },
+    {
+      id: "snap-1",
+      configId: "daily",
+      fileName: "daily-2026-07-14.tar",
+      message: "Daily 2026-07-14",
+      type: "backup",
+      createdAt: "2026-07-14T03:00:00Z",
+      sizeBytes: 4_096_000,
+      durationSeconds: 12,
+    },
   ],
-  job: { id: "job-1", status: "complete", progress: 100, message: "Backup complete" },
+  jobStart: { job_id: "job-1" },
+  jobRunning: { id: "job-1", active: true, phase: "running", progress: 50 },
+  jobDone: { id: "job-1", active: false, phase: "done", progress: 100 },
+  retainedDelete: { deleted_files: 0, retained_files: 2, retained_paths: ["/srv/fabricator/backups/daily-1.tar"] },
+  purgedDelete: { deleted_files: 2, retained_files: 0, retained_paths: [] },
 };
 
 export const playitFixtures = {
   status: {
-    supported: true,
-    installed: true,
-    running: true,
-    claimed: true,
+    status: "running",
+    claim_url: null,
+    error_reason: null,
+    binary_verified: true,
+    tunnels_known: true,
     tunnels: [
-      { id: "tun-1", name: "Survival", domain: "fixture.playit.gg", port: 25565, serverId: "survival" },
+      { local_port: 25565, address: "survival.fixture.playit.gg", disabled_reason: null, name: "Survival", tunnel_type: "minecraft-java" },
     ],
   },
 };
@@ -164,10 +276,14 @@ export const javaFixtures = {
     system: { available: true, version: "21.0.5", path: "/usr/bin/java" },
     managed: [],
   },
-  installed: [
-    { major: 21, version: "21.0.5", path: "/srv/fabricator/java/21/bin/java" },
-  ],
-  installProgress: { taskId: "java-21", status: "complete", progress: 100 },
+  installed: {
+    system: { installed: true, version: "21.0.5", path: "/usr/bin/java" },
+    managed: [
+      { major: 17, version: "17.0.13", path: "/srv/fabricator/java/17/bin/java" },
+    ],
+  },
+  installTask: { task_id: "java-21", install_major: 21 },
+  installProgress: { task_id: "java-21", status: "done", downloaded: 104_857_600, total: 104_857_600, install_major: 21 },
 };
 
 export const updateFixtures = {

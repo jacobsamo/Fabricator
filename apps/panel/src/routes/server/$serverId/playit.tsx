@@ -17,6 +17,7 @@ export function PlayitPage() {
   const reset = usePlayitActionMutation("reset");
   const [confirm, setConfirm] = useState<"stop" | "reset" | null>(null);
   const [copied, setCopied] = useState(false);
+  const actionError = start.error || stop.error || reset.error;
   const status = playit.data?.status || "stopped";
   const port = typeof server.data?.port === "number" ? server.data.port : null;
   const tunnels = Array.isArray(playit.data?.tunnels) ? playit.data.tunnels as Array<Record<string, unknown>> : [];
@@ -45,6 +46,7 @@ export function PlayitPage() {
         <CardContent className="grid gap-4">
           {isUnsupported ? <p className="text-sm text-muted-foreground">playit.gg is not available on this platform.</p> : null}
           {!isUnsupported && showBinaryWarning ? <div className="rounded-md border border-yellow-500/60 bg-yellow-500/10 p-3 text-sm text-yellow-300">playit binary signature unverified. See install logs.</div> : null}
+          {actionError ? <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive" role="alert">{actionError.message}</div> : null}
           {!isUnsupported && isStopped ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div><p className="font-medium">Make your servers reachable without router setup.</p><p className="text-sm text-muted-foreground">playit.gg creates public tunnels with no port forwarding.</p></div>

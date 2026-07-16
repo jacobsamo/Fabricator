@@ -26,7 +26,8 @@ export function renderPanelRoute(options: RenderPanelOptions = {}): RenderResult
   const route = options.route ?? "/";
 
   usePanelApiMocks(options.api);
-  window.history.pushState({}, "Test", route);
+  router.history.replace(route);
+  router.history.flush();
 
   const result = render(
     <PanelTestProviders stores={stores}>

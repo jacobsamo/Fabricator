@@ -71,7 +71,7 @@ export function ManageConfigsPanel({
           {selected ? (
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" size="sm" disabled={Boolean(activeJob?.active) || Boolean(runningConfigId)} onClick={() => onRun(configId(selected))}>Run now</Button>
-              <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => onDelete(selected)}><Trash2 className="size-3" />Delete</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => onDelete(selected)}><Trash2 className="size-3" />Delete config</Button>
             </div>
           ) : null}
           <BackupConfigForm

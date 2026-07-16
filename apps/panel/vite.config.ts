@@ -44,6 +44,8 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    exclude: ["**/.tmp/**", "**/dist/**", "**/node_modules/**"],
+    fileParallelism: false,
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     restoreMocks: true,

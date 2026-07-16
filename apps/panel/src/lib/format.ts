@@ -6,14 +6,14 @@ export function formatNumber(value: number | null | undefined) {
 }
 
 export function formatTimestamp(iso: string | null | undefined) {
-  if (!iso) return "-";
+  if (!iso) return "—";
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "-";
+  if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString();
 }
 
 export function formatFileSize(bytes: number | null | undefined) {
-  if (typeof bytes !== "number" || !Number.isFinite(bytes)) return "-";
+  if (typeof bytes !== "number" || !Number.isFinite(bytes)) return "—";
   if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;

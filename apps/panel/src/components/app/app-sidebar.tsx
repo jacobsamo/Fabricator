@@ -17,10 +17,12 @@ import {
 
 import { ServerSwitcher } from "@/components/server/server-switcher";
 import { UpdateStatus } from "@/components/app/update-status";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarSection } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { authStatusQuery, useLogoutMutation } from "@/queries/auth";
 import { serverQuery } from "@/queries/servers";
 import { isVanillaServer } from "@/lib/server-status";
+import { appStoreActions } from "@/stores/app-store";
 
 const navItems = [
   { to: "/server/$serverId/overview", label: "Overview", icon: LayoutGrid },
@@ -49,8 +51,8 @@ export function AppSidebar() {
   const visibleNavItems = isVanillaServer(server.data) ? navItems.filter((item) => item.label !== "Mods") : navItems;
 
   return (
-    <aside className="flex h-screen w-[216px] shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
-      <div className="flex h-[57px] items-center gap-3 border-b border-border px-4">
+    <Sidebar>
+      <SidebarHeader>
         <div className="flex size-8 items-center justify-center rounded-md bg-primary text-white">
           <Server aria-hidden="true" />
         </div>
@@ -58,23 +60,25 @@ export function AppSidebar() {
           <div className="truncate text-sm font-semibold">Fabricator</div>
           <div className="truncate text-xs text-muted-foreground">Panel preview</div>
         </div>
-      </div>
+      </SidebarHeader>
 
-      <div className="border-b border-border p-3">
+      <SidebarSection>
         {serverId ? (
           <ServerSwitcher serverId={serverId} currentServer={server.data} />
         ) : (
           <button
             type="button"
             className="flex w-full items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left text-sm transition hover:bg-accent"
+            onClick={() => appStoreActions.setGlobalModal("create-server")}
           >
             <Plus className="size-3.5" />
             <span className="truncate">No servers yet</span>
           </button>
         )}
-      </div>
+      </SidebarSection>
 
-      <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Server navigation">
+      <SidebarContent>
+      <SidebarMenu aria-label="Server navigation">
         {visibleNavItems.map((item) => (
           serverId ? (
             <Link
@@ -90,19 +94,19 @@ export function AppSidebar() {
               <span className="truncate">{item.label}</span>
             </Link>
           ) : (
-            <div
+            <SidebarMenuItem
               key={item.label}
               aria-disabled="true"
-              className="flex h-9 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground/45"
             >
               <item.icon aria-hidden="true" />
               <span className="truncate">{item.label}</span>
-            </div>
+            </SidebarMenuItem>
           )
         ))}
-      </nav>
+      </SidebarMenu>
+      </SidebarContent>
 
-      <div className="flex flex-col gap-2 border-t border-border p-3">
+      <SidebarFooter>
         <Link
           to="/"
           className="flex h-9 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
@@ -125,7 +129,7 @@ export function AppSidebar() {
           </button>
         ) : null}
         <UpdateStatus />
-      </div>
-    </aside>
+      </SidebarFooter>
+    </Sidebar>
   );
 }

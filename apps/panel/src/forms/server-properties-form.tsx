@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { areServerPropertiesDirty, defaultServerProperties, type ServerProperties } from "@/lib/server-settings";
 import { useUpdateServerSettingsMutation } from "@/queries/servers";
@@ -120,7 +122,11 @@ export function ServerPropertiesForm({ server, canEdit }: { server: ServerDetail
 
   return (
     <form className="grid max-w-5xl gap-4 pb-20" onSubmit={(event) => { event.preventDefault(); void form.handleSubmit(); }}>
-      {!canEdit ? <div className="rounded-md border border-yellow-500/60 bg-yellow-500/10 p-3 text-sm text-yellow-300">Stop the server before editing configuration.</div> : null}
+      {!canEdit ? (
+        <Alert>
+          <AlertDescription>Stop the server before editing configuration.</AlertDescription>
+        </Alert>
+      ) : null}
       <section className="rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -161,7 +167,7 @@ function PropertyField({ form, name, disabled }: { form: { Field: React.Componen
       <form.Field name={name}>
         {(field: { state: { value: unknown }; handleChange: (value: boolean) => void }) => (
           <label className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm text-secondary-foreground">
-            <input type="checkbox" checked={Boolean(field.state.value)} disabled={disabled} onChange={(event) => field.handleChange(event.target.checked)} />
+            <Checkbox checked={Boolean(field.state.value)} disabled={disabled} onCheckedChange={(checked) => field.handleChange(checked === true)} />
             {label}
           </label>
         )}

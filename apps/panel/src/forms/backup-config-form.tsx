@@ -1,9 +1,13 @@
 import { useForm } from "@tanstack/react-form";
+import { useState } from "react";
 import { z } from "zod";
 
 import type { BackupConfigPayload } from "@/api/backups";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 export const backupConfigFormSchema = z.object({
   name: z.string().trim().min(1, "Name is required."),
@@ -69,9 +73,18 @@ export function BackupConfigForm({
   onCancel: () => void;
   onSubmit: (payload: BackupConfigPayload) => Promise<void> | void;
 }) {
+  const [error, setError] = useState("");
   const form = useForm({
     defaultValues: backupConfigToValues(config, defaultStoragePath),
-    onSubmit: async ({ value }) => onSubmit(backupConfigPayload(value)),
+    onSubmit: async ({ value }) => {
+      setError("");
+      const parsed = backupConfigFormSchema.safeParse(value);
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message || "Invalid backup config.");
+        return;
+      }
+      await onSubmit(backupConfigPayload(parsed.data));
+    },
   });
 
   return (
@@ -99,16 +112,27 @@ export function BackupConfigForm({
       <form.Field name="frequencyHours">
         {(field) => (
           <Field label="Frequency">
-            <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={String(field.state.value)} onChange={(event) => field.handleChange(Number(event.target.value))} disabled={disabled}>
-              {[1, 6, 12, 24, 168].map((hours) => <option key={hours} value={hours}>{hours === 1 ? "Every hour" : hours === 24 ? "Daily" : hours === 168 ? "Weekly" : `Every ${hours}h`}</option>)}
-            </select>
+            <Select value={String(field.state.value)} onValueChange={(value) => field.handleChange(Number(value))} disabled={disabled}>
+              <SelectTrigger className="h-10 w-full rounded-md">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {[1, 6, 12, 24, 168].map((hours) => (
+                    <SelectItem key={hours} value={String(hours)}>
+                      {hours === 1 ? "Every hour" : hours === 24 ? "Daily" : hours === 168 ? "Weekly" : `Every ${hours}h`}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </Field>
         )}
       </form.Field>
       <form.Field name="exclusions">
         {(field) => (
           <Field label="Exclusions">
-            <textarea className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm" value={String(field.state.value ?? "")} onChange={(event) => field.handleChange(event.target.value)} disabled={disabled} placeholder={"logs/**\ncrash-reports/**"} />
+            <Textarea className="min-h-20" value={String(field.state.value ?? "")} onChange={(event) => field.handleChange(event.target.value)} disabled={disabled} placeholder={"logs/**\ncrash-reports/**"} />
           </Field>
         )}
       </form.Field>
@@ -119,6 +143,7 @@ export function BackupConfigForm({
         <CheckboxField form={form} name="compress" label="Compress archives" disabled={disabled} />
       </div>
       <div className="flex justify-end gap-2">
+        {error ? <p className="mr-auto self-center text-sm text-destructive" role="alert">{error}</p> : null}
         <Button type="button" variant="ghost" onClick={onCancel} disabled={disabled}>Cancel</Button>
         <Button type="submit" disabled={disabled}>{submitLabel}</Button>
       </div>
@@ -135,7 +160,7 @@ function CheckboxField({ form, name, label, disabled }: { form: { Field: React.C
     <form.Field name={name}>
       {(field: { state: { value: unknown }; handleChange: (value: boolean) => void }) => (
         <label className="flex items-center gap-2 text-sm text-secondary-foreground">
-          <input type="checkbox" checked={Boolean(field.state.value)} onChange={(event) => field.handleChange(event.target.checked)} disabled={disabled} />
+          <Checkbox checked={Boolean(field.state.value)} onCheckedChange={(checked) => field.handleChange(checked === true)} disabled={disabled} />
           {label}
         </label>
       )}

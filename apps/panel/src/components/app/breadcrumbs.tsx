@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 
 import type { ServerSummary } from "@/api/schemas";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
 const ROUTE_LABELS: Record<string, string> = {
   overview: "Overview",
@@ -26,29 +27,35 @@ export function AppBreadcrumbs({ server }: AppBreadcrumbsProps) {
   const serverId = segments[0] === "server" ? segments[1] : null;
 
   return (
-    <nav className="flex min-w-0 items-center gap-1 text-sm" aria-label="Breadcrumb">
-      <Link to="/" className="shrink-0 text-muted-foreground transition hover:text-foreground">
-        Servers
-      </Link>
+    <Breadcrumb className="min-w-0">
+      <BreadcrumbList className="flex-nowrap">
+        <BreadcrumbItem>
+          <BreadcrumbLink render={<Link to="/" />} className="shrink-0">
+            Servers
+          </BreadcrumbLink>
+        </BreadcrumbItem>
       {serverId ? (
         <>
-          <span className="text-muted-foreground/60">/</span>
-          <Link
-            to="/server/$serverId/overview"
-            params={{ serverId }}
-            className="max-w-44 truncate text-muted-foreground transition hover:text-foreground"
-          >
-            {server?.name || serverId}
-          </Link>
-          <span className="text-muted-foreground/60">/</span>
-          <span className="truncate font-medium text-foreground">{currentLabel}</span>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink render={<Link to="/server/$serverId/overview" params={{ serverId }} />} className="max-w-44 truncate">
+              {server?.name || serverId}
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage className="truncate font-medium">{currentLabel}</BreadcrumbPage>
+          </BreadcrumbItem>
         </>
       ) : (
         <>
-          <span className="text-muted-foreground/60">/</span>
-          <span className="truncate font-medium text-foreground">All servers</span>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage className="truncate font-medium">All servers</BreadcrumbPage>
+          </BreadcrumbItem>
         </>
       )}
-    </nav>
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }

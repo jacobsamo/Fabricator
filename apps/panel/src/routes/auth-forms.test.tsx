@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { authFixtures } from "@/test/fixtures";
+import { authErrorFixtures, authFixtures } from "@/test/fixtures";
 import { renderPanelRoute } from "@/test/render";
 
 describe("auth form routes", () => {
@@ -37,10 +37,27 @@ describe("auth form routes", () => {
     });
 
     await user.type(await screen.findByPlaceholderText("Password"), "long-enough");
-    await user.type(screen.getByPlaceholderText("Confirm password"), "different");
+    await user.type(screen.getByPlaceholderText("Confirm password"), "different-password");
     await user.click(screen.getByRole("button", { name: "Create password" }));
 
     expect(await screen.findByText("Passwords must match.")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/setup");
+  });
+
+  it("keeps rejected setup attempts on /setup", async () => {
+    const { user } = renderPanelRoute({
+      route: "/setup",
+      api: {
+        authStatus: authFixtures.needsSetup,
+        setupError: { status: 500, body: authErrorFixtures.setupFailure },
+      },
+    });
+
+    await user.type(await screen.findByPlaceholderText("Password"), "long-enough");
+    await user.type(screen.getByPlaceholderText("Confirm password"), "long-enough");
+    await user.click(screen.getByRole("button", { name: "Create password" }));
+
+    expect(await screen.findByText("Unable to create operator password.")).toBeInTheDocument();
     expect(window.location.pathname).toBe("/setup");
   });
 

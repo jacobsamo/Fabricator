@@ -21,7 +21,7 @@ export const serverSummarySchema = z.object({
   version: z.string().optional(),
   runtime: z.object({
     status: z.string().optional(),
-  }).optional(),
+  }).passthrough().optional(),
   players: z.object({
     online: z.number().optional(),
     max: z.number().optional(),
@@ -49,6 +49,7 @@ export const serverLogsSchema = z.object({
 
 export const installedModSchema = z.object({
   name: z.string(),
+  filename: z.string().optional(),
   size: z.number().optional(),
   updatedAt: z.string().optional(),
   path: z.string().optional(),

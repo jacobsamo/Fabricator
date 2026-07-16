@@ -20,7 +20,6 @@ export function setAuthenticatedSession() {
 
 export async function clearAuthenticatedSession(status: AuthStatus = unauthenticatedStatus) {
   await queryClient.cancelQueries({ predicate: (query) => isSessionQueryKey(query.queryKey) });
-  queryClient.removeQueries({ predicate: (query) => isSessionQueryKey(query.queryKey) });
-  queryClient.getMutationCache().clear();
+  queryClient.clear();
   queryClient.setQueryData(queryKeys.auth.status, status);
 }

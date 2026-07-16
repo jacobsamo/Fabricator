@@ -3,7 +3,13 @@ import { useParams } from "@tanstack/react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Archive, Search, Upload } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BackupStatsStrip } from "@/components/backups/backup-stats-strip";
 import { ManageConfigsPanel } from "@/components/backups/manage-configs-panel";
 import { SnapshotsTable } from "@/components/backups/snapshots-table";
@@ -38,6 +44,7 @@ export function BackupsPage() {
   const [retainedBanner, setRetainedBanner] = useState<Record<string, unknown> | null>(null);
   const [quickBackup, setQuickBackup] = useState<QuickBackupPayload>({ storagePath: "", compress: true, flush: true, shutdown: false });
   const [worldFile, setWorldFile] = useState<File | null>(null);
+  const [actionError, setActionError] = useState("");
   const abortUploadRef = useRef<(() => void) | null>(null);
   const activeJobId = ui.activeJobId;
   const job = useQuery(backupJobQuery(activeJobId));
@@ -78,9 +85,16 @@ export function BackupsPage() {
   const defaultStoragePath = typeof summary?.defaultStoragePath === "string" ? summary.defaultStoragePath : "";
 
   async function startJob(kind: string, starter: Promise<{ job_id: string }>, meta: Record<string, unknown> = {}) {
-    const result = await starter;
-    setJobMeta({ id: result.job_id, kind, active: true, phase: "starting", ...meta });
-    backupsUiStoreActions.setActiveJobId(result.job_id);
+    setActionError("");
+    try {
+      const result = await starter;
+      if (!result.job_id) throw new Error(`${kind} did not return a job id`);
+      setJobMeta({ id: result.job_id, kind, active: true, phase: "starting", ...meta });
+      backupsUiStoreActions.setActiveJobId(result.job_id);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : `Failed to start ${kind}.`);
+      throw err;
+    }
   }
 
   async function saveConfigDraft(configId: string | null, payload: BackupConfigPayload) {
@@ -105,14 +119,21 @@ export function BackupsPage() {
 
   async function importWorld() {
     if (!worldFile) return;
-    await startJob("world_import", uploadWorld.mutateAsync({
-      file: worldFile,
-      onProgress: backupsUiStoreActions.setUploadProgress,
-      registerAbort: (abort) => { abortUploadRef.current = abort; },
-    }));
-    setWorldFile(null);
-    backupsUiStoreActions.setUploadProgress(null);
-    backupsUiStoreActions.setActiveDialog(null);
+    try {
+      await startJob("world_import", uploadWorld.mutateAsync({
+        file: worldFile,
+        onProgress: backupsUiStoreActions.setUploadProgress,
+        registerAbort: (abort) => { abortUploadRef.current = abort; },
+      }));
+      setWorldFile(null);
+      backupsUiStoreActions.setActiveDialog(null);
+      backupsUiStoreActions.setUploadProgress(null);
+    } catch {
+      // startJob already surfaced the actionable message.
+      backupsUiStoreActions.setActiveDialog(null);
+    } finally {
+      abortUploadRef.current = null;
+    }
   }
 
   return (
@@ -129,23 +150,32 @@ export function BackupsPage() {
         </div>
       </header>
       <BackupStatsStrip summary={summary} loading={summaryLoading} />
-      {activeJob ? <div className="rounded-md border border-primary/50 bg-primary/10 p-3 text-sm">Active {String(activeJob.kind || "backup")} job · {String(activeJob.phase || "starting")} {activeJob.active === false ? "(complete)" : "(polling...)"}</div> : null}
+      {actionError ? <Alert variant="destructive"><AlertDescription>{actionError}</AlertDescription></Alert> : null}
+      {activeJob ? <Alert><AlertDescription>Active {String(activeJob.kind || "backup")} job · {String(activeJob.phase || "starting")} {activeJob.active === false ? "(complete)" : "(polling...)"}</AlertDescription></Alert> : null}
       {retainedBanner ? (
-        <div className="rounded-md border border-border bg-card p-3 text-sm">
-          <div className="flex justify-between gap-3"><strong>Archive files retained on disk</strong><button className="text-muted-foreground" onClick={() => setRetainedBanner(null)}>Dismiss</button></div>
-          <p className="mt-1 text-muted-foreground">{String(retainedBanner.retained_files ?? 0)} archive files were kept for {String(retainedBanner.configName ?? "this config")}.</p>
-        </div>
+        <Alert>
+          <AlertTitle>Archive files retained on disk</AlertTitle>
+          <AlertDescription>{String(retainedBanner.retained_files ?? 0)} archive files were kept for {String(retainedBanner.configName ?? "this config")}.</AlertDescription>
+          <Button className="absolute right-2 top-2 h-7 px-2 text-xs" variant="ghost" onClick={() => setRetainedBanner(null)}>Dismiss</Button>
+        </Alert>
       ) : null}
       <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-card p-3">
         {["all", "backup", "safety", "restore", "import"].map((value) => <Button key={value} type="button" size="sm" variant={typeFilter === value ? "default" : "outline"} onClick={() => setTypeFilter(value)}>{value}</Button>)}
-        <select className="h-8 rounded-md border border-input bg-background px-2 text-sm" value={configFilter} onChange={(event) => setConfigFilter(event.target.value)}>
-          <option value="all">All configs</option>
-          <option value="__manual__">Manual</option>
-          {configs.map((config) => <option key={String(config.id)} value={String(config.id)}>{String(config.name || "(unnamed)")}</option>)}
-        </select>
+        <Select value={configFilter} onValueChange={(value) => { if (value) setConfigFilter(value); }}>
+          <SelectTrigger size="sm" className="w-44 rounded-md">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">All configs</SelectItem>
+              <SelectItem value="__manual__">Manual</SelectItem>
+              {configs.map((config) => <SelectItem key={String(config.id)} value={String(config.id)}>{String(config.name || "(unnamed)")}</SelectItem>)}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         <label className="ml-auto flex h-8 items-center gap-2 rounded-md border border-input bg-background px-2 text-sm">
           <Search className="size-3 text-muted-foreground" />
-          <input className="bg-transparent outline-none" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search snapshots" />
+          <Input className="h-7 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search snapshots" />
         </label>
       </div>
       {ui.activeDialog === "manage-configs" ? (
@@ -160,7 +190,7 @@ export function BackupsPage() {
           onSelect={backupsUiStoreActions.selectConfig}
           onCreate={() => backupsUiStoreActions.selectConfig(null)}
           onSave={saveConfigDraft}
-          onRun={(configId) => void startJob("backup", runConfig.mutateAsync(configId), { configId })}
+          onRun={(configId) => void startJob("backup", runConfig.mutateAsync(configId), { configId }).catch(() => undefined)}
           onDelete={(config) => {
             backupsUiStoreActions.selectConfig(String(config.id));
             backupsUiStoreActions.setActiveDialog("delete-config");
@@ -182,22 +212,22 @@ export function BackupsPage() {
           backupsUiStoreActions.setActiveDialog("delete-snapshot");
         }}
       />
-      {ui.activeDialog === "quick-backup" ? <Modal title="Quick backup" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><QuickBackupForm value={quickBackup} onChange={setQuickBackup} defaultStoragePath={defaultStoragePath} disabled={quickBackupMutation.isPending} onSubmit={runQuickBackup} /></Modal> : null}
-      {ui.activeDialog === "restore" ? <Modal title="Restore snapshot" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><div className="grid gap-3 text-sm"><p className="text-muted-foreground">Choose how to restore this snapshot.</p><Button onClick={() => void restoreSnapshot("in_place")}>Restore in place</Button><Button variant="destructive" onClick={() => void restoreSnapshot("reset")}>Reset world then restore</Button></div></Modal> : null}
+      {ui.activeDialog === "quick-backup" ? <Modal title="Quick backup" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><QuickBackupForm value={quickBackup} onChange={setQuickBackup} defaultStoragePath={defaultStoragePath} disabled={quickBackupMutation.isPending} onSubmit={() => void runQuickBackup().catch(() => undefined)} /></Modal> : null}
+      {ui.activeDialog === "restore" ? <Modal title="Restore snapshot" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><div className="grid gap-3 text-sm"><p className="text-muted-foreground">Choose how to restore this snapshot.</p><Button onClick={() => void restoreSnapshot("in_place").catch(() => undefined)}>Restore in place</Button><Button variant="destructive" onClick={() => void restoreSnapshot("reset").catch(() => undefined)}>Reset world then restore</Button></div></Modal> : null}
       {ui.activeDialog === "delete-snapshot" ? <Modal title="Delete snapshot" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><ConfirmBody action="Delete" pending={deleteSnapshot.isPending} onConfirm={async () => { if (ui.selectedSnapshotId) await deleteSnapshot.mutateAsync(ui.selectedSnapshotId); backupsUiStoreActions.setActiveDialog(null); }} /></Modal> : null}
       {ui.activeDialog === "delete-config" ? <Modal title="Delete backup config" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><DeleteConfigBody pending={deleteConfig.isPending} onConfirm={async (purge) => { if (!ui.selectedConfigId) return; const config = configsById.get(ui.selectedConfigId); const result = await deleteConfig.mutateAsync({ configId: ui.selectedConfigId, purge }); if (result.retained_files) setRetainedBanner({ ...result, configName: config?.name }); backupsUiStoreActions.setActiveDialog(null); }} /></Modal> : null}
-      {ui.activeDialog === "import-world" ? <Modal title="Import world" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><div className="grid gap-3 text-sm"><p className="text-muted-foreground">Upload a zip, tar, or tar.gz archive to replace the active world.</p><input type="file" onChange={(event) => setWorldFile(event.target.files?.[0] || null)} />{ui.uploadProgress !== null ? <p>Upload progress: {ui.uploadProgress < 0 ? "working..." : `${ui.uploadProgress}%`}</p> : null}<div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => abortUploadRef.current?.()} disabled={!uploadWorld.isPending}>Cancel upload</Button><Button disabled={!worldFile || uploadWorld.isPending || Boolean(activeJob?.active)} onClick={() => void importWorld()}>{uploadWorld.isPending ? "Uploading..." : "Import"}</Button></div></div></Modal> : null}
+      {ui.activeDialog === "import-world" ? <Modal title="Import world" onClose={() => backupsUiStoreActions.setActiveDialog(null)}><div className="grid gap-3 text-sm"><p className="text-muted-foreground">Upload a zip, tar, or tar.gz archive to replace the active world.</p><label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">World archive<Input type="file" onChange={(event) => setWorldFile(event.target.files?.[0] || null)} /></label>{ui.uploadProgress !== null ? <div className="grid gap-2">{ui.uploadProgress < 0 ? <p>Upload progress: working...</p> : <><p>Upload progress: {ui.uploadProgress}%</p><Progress value={ui.uploadProgress} /></>}</div> : null}<div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => abortUploadRef.current?.()} disabled={!uploadWorld.isPending}>Cancel upload</Button><Button disabled={!worldFile || uploadWorld.isPending || Boolean(activeJob?.active)} onClick={() => void importWorld()}>{uploadWorld.isPending ? "Uploading..." : "Import"}</Button></div></div></Modal> : null}
     </div>
   );
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}><div className="w-full max-w-xl rounded-lg border border-border bg-card p-5 shadow-xl" onClick={(event) => event.stopPropagation()}><div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-base font-semibold">{title}</h3><button className="text-muted-foreground" onClick={onClose}>Close</button></div>{children}</div></div>;
+  return <Dialog open title={title} className="max-w-xl" onOpenChange={(open) => { if (!open) onClose(); }}><div className="px-4 py-4">{children}</div></Dialog>;
 }
 
 function QuickBackupForm({ value, onChange, defaultStoragePath, disabled, onSubmit }: { value: QuickBackupPayload; onChange: (value: QuickBackupPayload) => void; defaultStoragePath: string; disabled?: boolean; onSubmit: () => void }) {
   const next = value.storagePath || defaultStoragePath;
-  return <div className="grid gap-3 text-sm"><input className="h-10 rounded-md border border-input bg-background px-3" value={next} onChange={(event) => onChange({ ...value, storagePath: event.target.value })} placeholder="/absolute/path/to/backups" />{(["compress", "flush", "shutdown"] as const).map((key) => <label key={key} className="flex gap-2"><input type="checkbox" checked={value[key]} onChange={(event) => onChange({ ...value, [key]: event.target.checked })} />{key}</label>)}<Button disabled={disabled} onClick={onSubmit}>Start quick backup</Button></div>;
+  return <div className="grid gap-3 text-sm"><Input value={next} onChange={(event) => onChange({ ...value, storagePath: event.target.value })} placeholder="/absolute/path/to/backups" />{(["compress", "flush", "shutdown"] as const).map((key) => <label key={key} className="flex gap-2"><Checkbox checked={value[key]} onCheckedChange={(checked) => onChange({ ...value, [key]: checked === true })} />{key}</label>)}<Button disabled={disabled} onClick={onSubmit}>Start quick backup</Button></div>;
 }
 
 function ConfirmBody({ action, pending, onConfirm }: { action: string; pending?: boolean; onConfirm: () => void }) {
@@ -206,5 +236,5 @@ function ConfirmBody({ action, pending, onConfirm }: { action: string; pending?:
 
 function DeleteConfigBody({ pending, onConfirm }: { pending?: boolean; onConfirm: (purge: boolean) => void }) {
   const [purge, setPurge] = useState(false);
-  return <div className="grid gap-3 text-sm"><p className="text-muted-foreground">Delete this backup config. Purging also removes owned archive files from disk.</p><label className="flex gap-2"><input type="checkbox" checked={purge} onChange={(event) => setPurge(event.target.checked)} />Purge archive files</label><Button variant="destructive" disabled={pending} onClick={() => onConfirm(purge)}>{pending ? "Deleting..." : "Delete config"}</Button></div>;
+  return <div className="grid gap-3 text-sm"><p className="text-muted-foreground">Delete this backup config. Purging also removes owned archive files from disk.</p><label className="flex gap-2"><Checkbox checked={purge} onCheckedChange={(checked) => setPurge(checked === true)} />Purge archive files</label><Button variant="destructive" disabled={pending} onClick={() => onConfirm(purge)}>{pending ? "Deleting..." : "Delete config"}</Button></div>;
 }

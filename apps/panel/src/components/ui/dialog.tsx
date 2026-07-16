@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,49 +15,35 @@ type DialogProps = {
 };
 
 export function Dialog({ open, title, description, children, className, onOpenChange }: DialogProps) {
-  React.useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onOpenChange, open]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 p-4 pt-[12vh]"
-      role="presentation"
-      onMouseDown={() => onOpenChange(false)}
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dialog-title"
-        aria-describedby={description ? "dialog-description" : undefined}
-        className={cn("w-full max-w-md rounded-lg border border-border bg-popover text-popover-foreground shadow-xl", className)}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/55 duration-150 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
+        <DialogPrimitive.Popup
+          className={cn(
+            "fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 rounded-lg border border-border bg-popover text-popover-foreground shadow-xl outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            className,
+          )}
+        >
         <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <h2 id="dialog-title" className="text-sm font-semibold">
+            <DialogPrimitive.Title className="text-sm font-semibold">
               {title}
-            </h2>
+            </DialogPrimitive.Title>
             {description ? (
-              <p id="dialog-description" className="mt-1 text-xs text-muted-foreground">
+              <DialogPrimitive.Description className="mt-1 text-xs text-muted-foreground">
                 {description}
-              </p>
+              </DialogPrimitive.Description>
             ) : null}
           </div>
-          <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Close" onClick={() => onOpenChange(false)}>
+          <DialogPrimitive.Close render={<Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Close" />}>
             <X />
-          </Button>
+          </DialogPrimitive.Close>
         </div>
         {children}
-      </section>
-    </div>
+        </DialogPrimitive.Popup>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 

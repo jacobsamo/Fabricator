@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import * as serversApi from "@/api/servers";
 import { mergeLogLines, type LogLevel } from "@/components/server/log-utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { queryKeys } from "@/lib/query-keys";
 import { getEffectiveStatus } from "@/lib/server-status";
 import { serverLogsQuery, serverQuery } from "@/queries/servers";
@@ -111,8 +112,8 @@ export function ConsolePage() {
         }}
       >
         <span className="shrink-0 font-mono text-primary">&gt;</span>
-        <input
-          className="min-w-0 flex-1 bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:text-muted-foreground"
+        <Input
+          className="min-w-0 flex-1 border-0 bg-transparent px-0 font-mono shadow-none focus-visible:ring-0"
           value={command}
           disabled={!canSendCommand || sendCommand.isPending}
           placeholder={canSendCommand ? "Type a command and press Enter..." : "Server not running"}

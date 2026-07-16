@@ -11,6 +11,7 @@ import { ServerPanel } from "@/components/server/server-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { serverQuery } from "@/queries/servers";
 import { cn } from "@/lib/utils";
 
@@ -150,16 +151,16 @@ function mergePlayers(state: PlayersState, online: PlayerEntry[]): PlayerRowMode
     return created;
   };
 
-  for (const player of state.knownPlayers) {
+  for (const player of state.knownPlayers ?? []) {
     const row = ensure(player);
     if (row) row.lastSeen = lastSeenFromExpiresOn(player.expiresOn);
   }
-  for (const entry of [...state.whitelist, ...state.ops, ...state.bans, ...online]) ensure(entry);
+  for (const entry of [...(state.whitelist ?? []), ...(state.ops ?? []), ...(state.bans ?? []), ...online]) ensure(entry);
 
   const onlineMap = new Map(online.map((player) => [normalizeName(player.name), player]));
-  const opMap = new Map(state.ops.map((player) => [normalizeName(player.name), player]));
-  const banMap = new Map(state.bans.map((player) => [normalizeName(player.name), player]));
-  const whitelistSet = new Set(state.whitelist.map((player) => normalizeName(player.name)));
+  const opMap = new Map((state.ops ?? []).map((player) => [normalizeName(player.name), player]));
+  const banMap = new Map((state.bans ?? []).map((player) => [normalizeName(player.name), player]));
+  const whitelistSet = new Set((state.whitelist ?? []).map((player) => normalizeName(player.name)));
 
   return Array.from(byName.values())
     .map((row) => {
@@ -249,7 +250,7 @@ export function PlayersPage() {
     refetchInterval: isRunning ? 5000 : false,
   });
 
-  const state = stateQuery.data ?? emptyPlayersState;
+  const state = { ...emptyPlayersState, ...stateQuery.data };
   const online = isRunning ? (onlineQuery.data ?? []) : [];
   const players = React.useMemo(() => mergePlayers(state, online), [state, online]);
   const [filter, setFilter] = React.useState("all");
@@ -365,19 +366,27 @@ export function PlayersPage() {
   async function addPlayer(action: "whitelist" | "op" | "ban") {
     const name = addName.trim();
     if (!name) return;
-    if (action === "whitelist") await addWhitelistMutation.mutateAsync(name);
-    if (action === "op") await addOpMutation.mutateAsync({ name, level: 4 });
-    if (action === "ban") await addBanMutation.mutateAsync({ name, reason: null });
-    setAddName("");
+    try {
+      if (action === "whitelist") await addWhitelistMutation.mutateAsync(name);
+      if (action === "op") await addOpMutation.mutateAsync({ name, level: 4 });
+      if (action === "ban") await addBanMutation.mutateAsync({ name, reason: null });
+      setAddName("");
+    } catch {
+      // Mutation handlers already restore query state and surface the error.
+    }
   }
 
   async function submitReason() {
     if (!reasonTarget) return;
     const reason = reasonText.trim() || null;
-    if (reasonTarget.mode === "kick") await kickMutation.mutateAsync({ name: reasonTarget.name, reason });
-    else await addBanMutation.mutateAsync({ name: reasonTarget.name, reason });
-    setReasonTarget(null);
-    setReasonText("");
+    try {
+      if (reasonTarget.mode === "kick") await kickMutation.mutateAsync({ name: reasonTarget.name, reason });
+      else await addBanMutation.mutateAsync({ name: reasonTarget.name, reason });
+      setReasonTarget(null);
+      setReasonText("");
+    } catch {
+      // Keep the reason editor open so the failed action can be retried.
+    }
   }
 
   const showLoading = stateQuery.isLoading && players.length === 0;
@@ -515,19 +524,22 @@ export function PlayersPage() {
                       {player.isOp ? "Op" : "Op"}
                     </RoleChip>
                     {player.isOp ? (
-                      <select
-                        className="h-8 rounded-md border border-border bg-background px-2 text-xs text-secondary-foreground disabled:opacity-50"
+                      <Select
                         disabled={isRunning}
-                        title={isRunning ? "Stop the server to change op level" : "Operator level"}
-                        value={player.opLevel}
-                        onChange={(event) => setOpLevelMutation.mutate({ name: player.name, level: Number(event.target.value) })}
+                        value={String(player.opLevel)}
+                        onValueChange={(value) => {
+                          if (value) setOpLevelMutation.mutate({ name: player.name, level: Number(value) });
+                        }}
                       >
-                        {[1, 2, 3, 4].map((level) => (
-                          <option key={level} value={level}>
-                            L{level}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger size="sm" className="w-16 rounded-md" title={isRunning ? "Stop the server to change op level" : "Operator level"}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {[1, 2, 3, 4].map((level) => <SelectItem key={level} value={String(level)}>L{level}</SelectItem>)}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                     ) : null}
                     {player.isOnline ? (
                       <Button size="sm" variant="ghost" onClick={() => setReasonTarget({ name: player.name, mode: "kick" })}>

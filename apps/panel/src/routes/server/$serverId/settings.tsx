@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ChangePasswordPanel } from "@/components/settings/change-password-panel";
 import { JavaManagerPanel } from "@/components/settings/java-manager-panel";
 import { authStatusQuery } from "@/queries/auth";
@@ -36,16 +37,18 @@ export function SettingsPage() {
           <CardTitle>Auto-start</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-2">
-          {[
-            ["always", "Always start", "Start this server every time Fabricator starts."],
-            ["last", "Restore last state", "Start only if it was running when Fabricator last stopped."],
-            ["never", "Never", "Start it manually when you need it."],
-          ].map(([value, label, hint]) => (
-            <label key={value} className={`flex gap-3 rounded-md border p-3 ${mode === value ? "border-primary bg-primary/10" : "border-border bg-background"}`}>
-              <input type="radio" name="autostart-mode" checked={mode === value} onChange={() => void setMode(value as "always" | "last" | "never")} />
-              <span><span className="block text-sm font-medium">{label}</span><span className="text-xs text-muted-foreground">{hint}</span></span>
-            </label>
-          ))}
+          <RadioGroup value={mode} onValueChange={(value) => { if (value) void setMode(value as "always" | "last" | "never"); }}>
+            {[
+              ["always", "Always start", "Start this server every time Fabricator starts."],
+              ["last", "Restore last state", "Start only if it was running when Fabricator last stopped."],
+              ["never", "Never", "Start it manually when you need it."],
+            ].map(([value, label, hint]) => (
+              <label key={value} className={`flex gap-3 rounded-md border p-3 ${mode === value ? "border-primary bg-primary/10" : "border-border bg-background"}`}>
+                <RadioGroupItem value={value} />
+                <span><span className="block text-sm font-medium">{label}</span><span className="text-xs text-muted-foreground">{hint}</span></span>
+              </label>
+            ))}
+          </RadioGroup>
           {autostart.error ? <p className="text-sm text-destructive">{autostart.error.message}</p> : null}
         </CardContent>
       </Card>

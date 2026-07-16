@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { serversQuery } from "@/queries/servers";
+import { appStoreActions } from "@/stores/app-store";
 
 export function ServerListPage() {
   const navigate = useNavigate();
@@ -30,7 +31,7 @@ export function ServerListPage() {
           <h1 className="text-xl font-semibold">Servers</h1>
           <p className="text-sm text-muted-foreground">Current Vue server list parity target.</p>
         </div>
-        <Button>
+        <Button type="button" onClick={() => appStoreActions.setGlobalModal("create-server")}>
           <Plus data-icon="inline-start" />
           Create server
         </Button>
